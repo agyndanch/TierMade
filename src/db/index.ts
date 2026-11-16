@@ -23,7 +23,8 @@ export function createDb(url: string): DB {
   const { Pool } = require("pg") as typeof import("pg");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { drizzle } = require("drizzle-orm/node-postgres") as typeof import("drizzle-orm/node-postgres");
-  const pool = new Pool({ connectionString: url, max: 10 });
+  // Small pool: on serverless each instance holds its own (use Neon's pooled URL).
+  const pool = new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 10_000 });
   return drizzle(pool, { schema }) as unknown as DB;
 }
 

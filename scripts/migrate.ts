@@ -7,7 +7,8 @@ import { createDb } from "../src/db";
 import { runMigrations } from "../src/db/migrate";
 
 async function main() {
-  const url = process.env.DATABASE_URL;
+  // Prefer Neon's direct connection for DDL; the app itself uses the pooled one.
+  const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
   if (url.startsWith("pglite://") && url !== "pglite://memory") {
     fs.mkdirSync(url.slice("pglite://".length), { recursive: true });
