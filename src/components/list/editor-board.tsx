@@ -1,13 +1,12 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
-  closestCorners,
   useDroppable,
   useSensor,
   useSensors,
@@ -16,11 +15,12 @@ import {
   type DragStartEvent,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ListTier } from "@/db/schema";
 import type { EntryWithItem } from "@/repositories/entries";
 import { cn } from "@/lib/utils";
+import { tierCollision, tierKeyboardCoordinates } from "@/lib/tier-collision";
 import { TierLabel, TierTile } from "./entry-views";
 
 /** Tier lists' unsorted pool. (Ranked lists use ranked-editor.tsx.) */
@@ -76,7 +76,11 @@ export function TierBoard({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: tierKeyboardCoordinates([...tiers.map((t) => t.id), UNSORTED]),
+      // Instant scrolling keeps measured positions in sync when a jump scrolls the page.
+      scrollBehavior: "instant",
+    }),
   );
 
   const activeEntry = activeId
@@ -117,7 +121,8 @@ export function TierBoard({
       if (from && to && from === to) {
         const items = containers[from];
         const oldIndex = items.findIndex((e) => e.id === active.id);
-        const newIndex = items.findIndex((e) => e.id === over.id);
+        // Over a cover: take its place. Over the tier itself (empty space past the last cover): go to the end.
+        const newIndex = String(over.id) === to ? items.length - 1 : items.findIndex((e) => e.id === over.id);
         if (oldIndex !== newIndex && newIndex >= 0) {
           next = { ...containers, [from]: arrayMove(items, oldIndex, newIndex) };
           onChange(next);
@@ -127,11 +132,17 @@ export function TierBoard({
     onCommit(next);
   }
 
+  // Which covers live in which tier, for the pointer-based collision detection.
+  const collision = useMemo(
+    () => tierCollision(Object.fromEntries(Object.entries(containers).map(([cid, list]) => [cid, list.map((e) => e.id)]))),
+    [containers],
+  );
+
   return (
     <DndContext
       id={dndId}
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collision}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -139,49 +150,61 @@ export function TierBoard({
     >
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         {tiers.map((t) => (
-          <div key={t.id} className="flex min-h-24 border-b border-border last:border-b-0 sm:min-h-28">
-            <TierLabel label={t.label} color={t.color} />
-            <TierDropZone id={t.id} entries={containers[t.id] ?? []} aspect={aspect} onRemove={onRemove} />
-          </div>
+          <TierRow key={t.id} tier={t} entries={containers[t.id] ?? []} aspect={aspect} onRemove={onRemove} />
         ))}
       </div>
       <div className="mt-4">
         <p className="mb-2 text-sm font-medium text-muted">Not ranked yet: drag these into a tier</p>
-        <div className="rounded-xl border border-dashed border-border bg-surface/50">
-          <TierDropZone
-            id={UNSORTED}
-            entries={containers[UNSORTED] ?? []}
-            aspect={aspect}
-            onRemove={onRemove}
-            emptyText="New items land here."
-          />
-        </div>
+        <UnsortedZone entries={containers[UNSORTED] ?? []} aspect={aspect} onRemove={onRemove} />
       </div>
       <DragOverlay>{activeEntry ? <TierTile entry={activeEntry} aspect={aspect} overlay /> : null}</DragOverlay>
     </DndContext>
   );
 }
 
-function TierDropZone({
-  id,
-  entries,
-  aspect,
-  onRemove,
-  emptyText,
-}: {
-  id: string;
+type ZoneProps = {
   entries: EntryWithItem[];
   aspect: "square" | "portrait";
   onRemove: (e: EntryWithItem) => void;
-  emptyText?: string;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+};
+
+/** One tier: the whole row, label included, is the drop target. */
+function TierRow({ tier, ...rest }: ZoneProps & { tier: ListTier }) {
+  const { setNodeRef, isOver } = useDroppable({ id: tier.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-24 border-b border-border transition-colors last:border-b-0 sm:min-h-28",
+        isOver && "bg-accent-soft/60",
+      )}
+    >
+      <TierLabel label={tier.label} color={tier.color} />
+      <TileArea id={tier.id} {...rest} />
+    </div>
+  );
+}
+
+function UnsortedZone(props: ZoneProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: UNSORTED });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-xl border border-dashed border-border bg-surface/50 transition-colors",
+        isOver && "border-accent bg-accent-soft/60",
+      )}
+    >
+      <TileArea id={UNSORTED} emptyText="New items land here." {...props} />
+    </div>
+  );
+}
+
+/** The sortable covers inside a tier or the unsorted pool (the drop target is the parent). */
+function TileArea({ id, entries, aspect, onRemove, emptyText }: ZoneProps & { id: string; emptyText?: string }) {
   return (
     <SortableContext id={id} items={entries.map((e) => e.id)} strategy={rectSortingStrategy}>
-      <div
-        ref={setNodeRef}
-        className={cn("flex min-h-24 flex-1 flex-wrap content-start gap-2 p-2 transition-colors", isOver && "bg-accent-soft/60")}
-      >
+      <div className="flex min-h-24 flex-1 flex-wrap content-start gap-2 p-2">
         {entries.map((e) => (
           <SortableTierTile key={e.id} entry={e} aspect={aspect} onRemove={() => onRemove(e)} />
         ))}
