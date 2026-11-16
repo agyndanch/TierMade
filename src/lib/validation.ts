@@ -29,6 +29,19 @@ export const addEntrySchema = z.object({
   tierId: z.uuid().nullable().optional(),
 });
 
+/** Form fields arrive as strings; treat "" as "not given". */
+const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
+export const customEntrySchema = z.object({
+  title: z.string().trim().min(1, "Give it a title").max(200),
+  creator: z.preprocess(blankToUndefined, z.string().trim().max(200).optional()),
+  imageUrl: z.preprocess(
+    blankToUndefined,
+    z.url({ protocol: /^https$/, message: "Image links must start with https://" }).max(2000).optional(),
+  ),
+  tierId: z.preprocess(blankToUndefined, z.uuid().optional()),
+});
+
 export const reorderSchema = z.object({
   entries: z
     .array(

@@ -12,6 +12,8 @@ export type CategoryInfo = {
   aspect: "square" | "portrait";
   source: "deezer" | "igdb" | "tmdb";
   placeholder: string;
+  /** label for the creator field when adding a custom item */
+  creatorLabel: string;
 };
 
 export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
@@ -22,6 +24,7 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     aspect: "square",
     source: "deezer",
     placeholder: "e.g. Blonde, Rumours, OK Computer",
+    creatorLabel: "Artist",
   },
   songs: {
     id: "songs",
@@ -30,6 +33,7 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     aspect: "square",
     source: "deezer",
     placeholder: "e.g. Bohemian Rhapsody",
+    creatorLabel: "Artist",
   },
   games: {
     id: "games",
@@ -38,6 +42,7 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     aspect: "portrait",
     source: "igdb",
     placeholder: "e.g. Hollow Knight, Zelda",
+    creatorLabel: "Developer",
   },
   films: {
     id: "films",
@@ -46,6 +51,7 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     aspect: "portrait",
     source: "tmdb",
     placeholder: "e.g. Inception, Spirited Away",
+    creatorLabel: "Director",
   },
   tv: {
     id: "tv",
@@ -54,6 +60,7 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     aspect: "portrait",
     source: "tmdb",
     placeholder: "e.g. The Bear, Breaking Bad",
+    creatorLabel: "Creator",
   },
 };
 

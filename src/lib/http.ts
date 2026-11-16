@@ -25,6 +25,12 @@ export function handle<Args extends unknown[]>(fn: (...args: Args) => Promise<Re
       if (err instanceof CatalogError) {
         return NextResponse.json({ error: err.message }, { status: err.status });
       }
+      // Postgres "invalid input syntax" (e.g. a malformed uuid in the URL):
+      // bodies are zod-validated, so this only comes from ids in the path.
+      const code = (err as { code?: string; cause?: { code?: string } })?.code ?? (err as { cause?: { code?: string } })?.cause?.code;
+      if (code === "22P02") {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
       console.error(err);
       return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
     }

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Loader2, Plus, Search } from "lucide-react";
+import { Check, Loader2, PencilLine, Plus, Search } from "lucide-react";
 import type { CategoryInfo } from "@/catalog/categories";
 import type { CatalogResult } from "@/catalog/types";
 import { Cover, Input } from "@/components/ui";
 import { api, cn } from "@/lib/utils";
+import { CustomItemForm } from "./custom-item-form";
 
 function useDebounced<T>(value: T, ms: number) {
   const [v, setV] = useState(value);
@@ -23,13 +24,17 @@ export function SearchPanel({
   addedExternalIds,
   pendingExternalIds,
   onAdd,
+  onAddCustom,
 }: {
   category: CategoryInfo;
   addedExternalIds: Set<string>;
   pendingExternalIds: Set<string>;
   onAdd: (result: CatalogResult) => void;
+  /** resolves true when the custom item was added */
+  onAddCustom: (form: FormData) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
+  const [customOpen, setCustomOpen] = useState(false);
   const q = useDebounced(query.trim(), 300);
 
   const { data, error, isFetching } = useQuery({
@@ -40,6 +45,22 @@ export function SearchPanel({
   });
 
   const results = q.length > 0 ? (data?.results ?? []) : [];
+  const noResults = !error && q.length > 0 && !isFetching && results.length === 0;
+
+  if (customOpen) {
+    return (
+      <CustomItemForm
+        category={category}
+        initialTitle={query.trim()}
+        onCancel={() => setCustomOpen(false)}
+        onSubmit={async (form) => {
+          const ok = await onAddCustom(form);
+          if (ok) setCustomOpen(false);
+          return ok;
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -58,9 +79,7 @@ export function SearchPanel({
 
       {error && <p className="text-sm text-danger">{error.message}</p>}
       {!error && q.length === 0 && <p className="text-sm text-muted">{category.placeholder}</p>}
-      {!error && q.length > 0 && !isFetching && results.length === 0 && (
-        <p className="text-sm text-muted">No results for “{q}”.</p>
-      )}
+      {noResults && <p className="text-sm text-muted">No results for “{q}”.</p>}
 
       <ul className="flex flex-col gap-1" aria-label="Search results">
         {results.map((r) => {
@@ -105,6 +124,20 @@ export function SearchPanel({
           );
         })}
       </ul>
+
+      <button
+        type="button"
+        onClick={() => setCustomOpen(true)}
+        className={cn(
+          "flex items-center justify-center gap-1.5 rounded-lg text-sm",
+          noResults
+            ? "border border-dashed border-border py-2.5 font-medium hover:border-accent hover:text-accent"
+            : "py-1 text-muted hover:text-foreground",
+        )}
+      >
+        <PencilLine className="size-4" />
+        {q.length > 0 ? "Can’t find it? Add it yourself" : `Add a custom ${category.noun}`}
+      </button>
     </div>
   );
 }

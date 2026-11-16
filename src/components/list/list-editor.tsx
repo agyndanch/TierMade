@@ -57,6 +57,31 @@ export function ListEditor({
   const allEntries = useMemo(() => Object.values(containers).flat(), [containers]);
   const added = useMemo(() => new Set(allEntries.map((e) => e.item.externalId)), [allEntries]);
 
+  /** Put a newly created entry at the end (ranked) or in the unsorted pool (tier). */
+  function appendEntry(entry: EntryWithItem) {
+    setContainers((c) => {
+      const key = format === "ranked" ? RANKED : UNSORTED;
+      const next = { ...c, [key]: [...c[key], entry] };
+      lastSaved.current = JSON.stringify(toOrderPayload(next));
+      return next;
+    });
+    toast.success(`Added ${entry.item.title}`, { duration: 1500 });
+  }
+
+  async function addCustom(form: FormData): Promise<boolean> {
+    try {
+      const { entry } = await api<{ entry: EntryWithItem }>(`/api/lists/${listId}/custom-entries`, {
+        method: "POST",
+        body: form,
+      });
+      appendEntry(entry);
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't add that");
+      return false;
+    }
+  }
+
   async function addItem(r: CatalogResult) {
     setPending((p) => new Set(p).add(r.externalId));
     try {
@@ -64,13 +89,7 @@ export function ListEditor({
         method: "POST",
         json: { externalId: r.externalId },
       });
-      setContainers((c) => {
-        const key = format === "ranked" ? RANKED : UNSORTED;
-        const next = { ...c, [key]: [...c[key], entry] };
-        lastSaved.current = JSON.stringify(toOrderPayload(next));
-        return next;
-      });
-      toast.success(`Added ${entry.item.title}`, { duration: 1500 });
+      appendEntry(entry);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't add that");
     } finally {
@@ -141,7 +160,10 @@ export function ListEditor({
       <aside className="order-1 lg:order-2">
         <div className="rounded-xl border border-border bg-surface p-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
           <h2 className="mb-2 text-sm font-semibold">Add {category.label.toLowerCase()}</h2>
-          <SearchPanel category={category} addedExternalIds={added} pendingExternalIds={pending} onAdd={addItem} />
+          <SearchPanel category={category} addedExternalIds={added} pendingExternalIds={pending}
+            onAdd={addItem}
+            onAddCustom={addCustom}
+          />
         </div>
       </aside>
     </div>

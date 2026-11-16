@@ -15,6 +15,13 @@
       "when": 1794814640539,
       "tag": "0001_list_grid_view",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794862099265,
+      "tag": "0002_custom_items",
+      "breakpoints": true
     }
   ]
 }

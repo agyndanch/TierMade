@@ -1,10 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { user } from "@/db/schema";
+import { items, user } from "@/db/schema";
 import { runMigrations } from "@/db/migrate";
 import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
-import { updateListSchema } from "@/lib/validation";
+import { MAX_IMAGE_BYTES, imageIdFromUrl } from "@/lib/images";
+import { customEntrySchema, updateListSchema } from "@/lib/validation";
+import { findImage } from "@/repositories/images";
 import { listsVisibleToUser, listsByOwner } from "@/repositories/lists";
 import * as lists from "@/services/lists";
 import * as friends from "@/services/friends";
@@ -125,6 +128,79 @@ describe("lists", () => {
     const list = await lists.createList(alice, { title: "Mine", category: "films", format: "ranked", visibility: "private" });
     await expectStatus(lists.addItemToList(list.id, bob, "heat", null, adapterFor), 404);
     await expectStatus(lists.deleteList(list.id, bob), 404);
+  });
+});
+
+describe("custom items", () => {
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+  const itemExists = async (id: string) => (await db.select().from(items).where(eq(items.id, id))).length > 0;
+
+  it("adds custom items with an uploaded image, a link, or no image", async () => {
+    const list = await lists.createList(alice, { title: "Rare songs", category: "songs", format: "ranked", visibility: "private" });
+    const uploaded = await lists.addCustomItemToList(list.id, alice, { title: "Demo tape", creator: "Local band", image: png });
+    const linked = await lists.addCustomItemToList(list.id, alice, {
+      title: "B-side",
+      creator: null,
+      imageUrl: "https://example.test/cover.jpg",
+    });
+    const bare = await lists.addCustomItemToList(list.id, alice, { title: "Untitled", creator: null });
+
+    const imageId = imageIdFromUrl(uploaded.item.imageUrl)!;
+    expect(imageId).toBeTruthy();
+    const stored = await findImage(imageId);
+    expect(stored?.contentType).toBe("image/png");
+    expect(Buffer.from(stored!.data).equals(png)).toBe(true);
+    expect(linked.item.imageUrl).toBe("https://example.test/cover.jpg");
+    expect(bare.item.imageUrl).toBeNull();
+
+    const detail = await lists.getListDetail(list.id, alice);
+    expect(detail.entries.map((e) => [e.item.title, e.item.subtitle])).toEqual([
+      ["Demo tape", "Local band"],
+      ["B-side", null],
+      ["Untitled", null],
+    ]);
+  });
+
+  it("rejects bad images, both image sources at once, and bad form fields", async () => {
+    const list = await lists.createList(alice, { title: "Bad", category: "songs", format: "ranked", visibility: "private" });
+    const add = (input: Partial<lists.CustomItemInput>) =>
+      lists.addCustomItemToList(list.id, alice, { title: "X", creator: null, ...input });
+    await expectStatus(add({ image: Buffer.from("<svg><script>alert(1)</script></svg>") }), 400);
+    await expectStatus(add({ image: Buffer.from("just text") }), 400);
+    await expectStatus(add({ image: Buffer.concat([png, Buffer.alloc(MAX_IMAGE_BYTES)]) }), 400);
+    await expectStatus(add({ image: png, imageUrl: "https://example.test/a.jpg" }), 400);
+
+    expect(() => customEntrySchema.parse({ title: "  " })).toThrow();
+    expect(() => customEntrySchema.parse({ title: "Ok", imageUrl: "http://example.test/a.jpg" })).toThrow();
+    expect(() => customEntrySchema.parse({ title: "Ok", imageUrl: "javascript:alert(1)" })).toThrow();
+    expect(customEntrySchema.parse({ title: " Ok ", creator: "", imageUrl: "", tierId: "" })).toEqual({ title: "Ok" });
+  });
+
+  it("only lets the owner add, and puts tier-list items in the requested tier", async () => {
+    const list = await lists.createList(alice, { title: "Tiers", category: "songs", format: "tier", visibility: "private" });
+    await expectStatus(lists.addCustomItemToList(list.id, bob, { title: "Nope", creator: null }), 404);
+
+    const s = (await lists.getListDetail(list.id, alice)).tiers[0];
+    const entry = await lists.addCustomItemToList(list.id, alice, { title: "Top", creator: null, tierId: s.id });
+    expect(entry.tierId).toBe(s.id);
+  });
+
+  it("deletes orphaned custom items and their images on remove or list delete", async () => {
+    const list = await lists.createList(alice, { title: "Temp", category: "songs", format: "ranked", visibility: "private" });
+    const a = await lists.addCustomItemToList(list.id, alice, { title: "A", creator: null, image: png });
+    const b = await lists.addCustomItemToList(list.id, alice, { title: "B", creator: null, image: png });
+    const catalogEntry = await lists.addItemToList(list.id, alice, "heat", null, adapterFor);
+
+    await lists.removeEntry(list.id, alice, a.id);
+    expect(await itemExists(a.item.id)).toBe(false);
+    expect(await findImage(imageIdFromUrl(a.item.imageUrl)!)).toBeNull();
+    expect(await itemExists(b.item.id)).toBe(true);
+
+    await lists.deleteList(list.id, alice);
+    expect(await itemExists(b.item.id)).toBe(false);
+    expect(await findImage(imageIdFromUrl(b.item.imageUrl)!)).toBeNull();
+    // catalog items are a shared cache and stay
+    expect(await itemExists(catalogEntry.item.id)).toBe(true);
   });
 });
 

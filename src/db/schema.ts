@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -82,12 +83,18 @@ export const friendshipStatus = pgEnum("friendship_status", [
   "declined",
 ]);
 
+/** Postgres bytea. node-postgres returns a Buffer, PGlite a Uint8Array; Buffer works as input for both. */
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => "bytea",
+});
+
 /** Shared catalog cache: every list entry points at one canonical item row. */
 export const items = pgTable(
   "items",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     category: text("category").notNull(),
+    /** "deezer" | "igdb" | "tmdb", or "custom" for user-made items */
     source: text("source").notNull(),
     externalId: text("external_id").notNull(),
     title: text("title").notNull(),
@@ -95,6 +102,8 @@ export const items = pgTable(
     year: integer("year"),
     imageUrl: text("image_url"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    /** set for custom items: the user who made it */
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("items_source_category_ext_uq").on(t.source, t.category, t.externalId)],
@@ -194,6 +203,22 @@ export const listShares = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.listId, t.userId] }), index("list_shares_user_idx").on(t.userId)],
+);
+
+/** Cover images uploaded for custom items, served by GET /api/images/[id]. */
+export const images = pgTable(
+  "images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("images_owner_idx").on(t.ownerId)],
 );
 
 export type User = typeof user.$inferSelect;
