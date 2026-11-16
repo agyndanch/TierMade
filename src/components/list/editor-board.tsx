@@ -28,7 +28,9 @@ import { CSS } from "@dnd-kit/utilities";
 import type { ListTier } from "@/db/schema";
 import type { EntryWithItem } from "@/repositories/entries";
 import { cn } from "@/lib/utils";
-import { RankedRow, TierLabel, TierTile } from "./entry-views";
+import type { ListDisplay } from "@/lib/list-display";
+import { GridTile, RankedRow, TierLabel, TierTile } from "./entry-views";
+import { RankedGrid } from "./ranked-grid";
 
 export const RANKED = "ranked";
 export const UNSORTED = "unsorted";
@@ -64,6 +66,7 @@ export function EditorBoard({
   format,
   tiers,
   aspect,
+  display,
   containers,
   onChange,
   onCommit,
@@ -72,6 +75,7 @@ export function EditorBoard({
   format: "ranked" | "tier";
   tiers: ListTier[];
   aspect: "square" | "portrait";
+  display: ListDisplay;
   containers: Containers;
   /** live updates while dragging */
   onChange: (next: Containers) => void;
@@ -144,6 +148,45 @@ export function EditorBoard({
     onDragEnd: handleDragEnd,
     onDragCancel: () => setActiveId(null),
   };
+
+  if (format === "ranked" && display.view === "grid") {
+    const items = containers[RANKED] ?? [];
+    const overflow = items.slice(display.gridColumns * display.gridRows);
+    return (
+      <DndContext {...dnd}>
+        <SortableContext items={items.map((e) => e.id)} strategy={rectSortingStrategy}>
+          <RankedGrid
+            entries={items}
+            display={display}
+            aspect={aspect}
+            renderTile={(e, i) => <SortableGridTile entry={e} rank={i + 1} aspect={aspect} onRemove={() => onRemove(e)} />}
+          />
+          {overflow.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-sm font-medium text-muted">
+                Not in the grid ({overflow.length}): drag these in, or make the grid bigger
+              </p>
+              <div
+                className="grid gap-1.5 rounded-xl border border-dashed border-border p-2"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))" }}
+              >
+                {overflow.map((e, i) => (
+                  <SortableGridTile
+                    key={e.id}
+                    entry={e}
+                    rank={display.gridColumns * display.gridRows + i + 1}
+                    aspect={aspect}
+                    onRemove={() => onRemove(e)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </SortableContext>
+        <DragOverlay>{activeEntry ? <GridTile entry={activeEntry} aspect={aspect} overlay /> : null}</DragOverlay>
+      </DndContext>
+    );
+  }
 
   if (format === "ranked") {
     const items = containers[RANKED] ?? [];
@@ -252,6 +295,34 @@ function SortableRankedRow({
         handleProps={{ ...attributes, ...listeners, ref: setActivatorNodeRef } as React.HTMLAttributes<HTMLButtonElement>}
       />
     </li>
+  );
+}
+
+function SortableGridTile({
+  entry,
+  rank,
+  aspect,
+  onRemove,
+}: {
+  entry: EntryWithItem;
+  rank: number;
+  aspect: "square" | "portrait";
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
+  return (
+    <GridTile
+      ref={setNodeRef}
+      entry={entry}
+      aspect={aspect}
+      dragging={isDragging}
+      onRemove={onRemove}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className="touch-none cursor-grab active:cursor-grabbing"
+      aria-label={`#${rank} ${entry.item.title}. Press space to pick up, arrow keys to move.`}
+      {...attributes}
+      {...listeners}
+    />
   );
 }
 

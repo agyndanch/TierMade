@@ -41,7 +41,9 @@ export async function findListById(id: string, d: DB = db): Promise<List | null>
 
 export async function updateList(
   id: string,
-  patch: Partial<Pick<List, "title" | "description" | "visibility">>,
+  patch: Partial<
+    Pick<List, "title" | "description" | "visibility" | "view" | "gridColumns" | "gridRows" | "showNumbers">
+  >,
   d: DB = db,
 ): Promise<List | null> {
   const [row] = await d

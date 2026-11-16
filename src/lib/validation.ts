@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CATEGORY_IDS } from "@/catalog/categories";
+import { GRID_MAX, GRID_MIN, LIST_VIEWS } from "@/lib/list-display";
 
 export const categorySchema = z.enum(CATEGORY_IDS, { message: "Unknown category" });
 
@@ -16,6 +17,10 @@ export const updateListSchema = z
     title: z.string().trim().min(1).max(100),
     description: z.string().trim().max(500).nullable(),
     visibility: z.enum(["private", "friends"]),
+    view: z.enum(LIST_VIEWS),
+    gridColumns: z.number().int().min(GRID_MIN).max(GRID_MAX),
+    gridRows: z.number().int().min(GRID_MIN).max(GRID_MAX),
+    showNumbers: z.boolean(),
   })
   .partial();
 

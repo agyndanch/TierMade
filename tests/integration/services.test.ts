@@ -4,6 +4,7 @@ import { user } from "@/db/schema";
 import { runMigrations } from "@/db/migrate";
 import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
+import { updateListSchema } from "@/lib/validation";
 import { listsVisibleToUser, listsByOwner } from "@/repositories/lists";
 import * as lists from "@/services/lists";
 import * as friends from "@/services/friends";
@@ -103,6 +104,21 @@ describe("lists", () => {
     await expectStatus(lists.reorderList(list.id, alice, [{ id: e.id, tierId: otherTier.id, position: 0 }]), 400);
     // order must cover every entry
     await expectStatus(lists.reorderList(list.id, alice, []), 400);
+  });
+
+  it("defaults to list view and saves grid display settings", async () => {
+    const list = await lists.createList(alice, { title: "Grid", category: "films", format: "ranked", visibility: "private" });
+    expect(list).toMatchObject({ view: "list", gridColumns: 5, gridRows: 5, showNumbers: true });
+
+    const patch = updateListSchema.parse({ view: "grid", gridColumns: 3, gridRows: 4, showNumbers: false });
+    await lists.updateList(list.id, alice, patch);
+    const { list: saved } = await lists.getListDetail(list.id, alice);
+    expect(saved).toMatchObject({ view: "grid", gridColumns: 3, gridRows: 4, showNumbers: false, title: "Grid" });
+
+    expect(() => updateListSchema.parse({ gridColumns: 11 })).toThrow();
+    expect(() => updateListSchema.parse({ gridRows: 0 })).toThrow();
+    expect(() => updateListSchema.parse({ view: "carousel" })).toThrow();
+    await expectStatus(lists.updateList(list.id, bob, { view: "list" }), 404);
   });
 
   it("only lets the owner edit", async () => {

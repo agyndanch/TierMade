@@ -1,6 +1,8 @@
 import type { ListTier } from "@/db/schema";
 import type { EntryWithItem } from "@/repositories/entries";
-import { RankedRow, TierLabel, TierTile } from "./entry-views";
+import { DEFAULT_DISPLAY, type ListDisplay } from "@/lib/list-display";
+import { GridTile, RankedRow, TierLabel, TierTile } from "./entry-views";
+import { RankedGrid } from "./ranked-grid";
 
 /** Read-only rendering of a ranked list or tier list. */
 export function StaticBoard({
@@ -8,14 +10,34 @@ export function StaticBoard({
   tiers,
   entries,
   aspect,
+  display = DEFAULT_DISPLAY,
 }: {
   format: "ranked" | "tier";
   tiers: ListTier[];
   entries: EntryWithItem[];
   aspect: "square" | "portrait";
+  display?: ListDisplay;
 }) {
   if (entries.length === 0) {
     return <p className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted">Nothing here yet.</p>;
+  }
+  if (format === "ranked" && display.view === "grid") {
+    const hidden = entries.length - display.gridColumns * display.gridRows;
+    return (
+      <div className="space-y-2">
+        <RankedGrid
+          entries={entries}
+          display={display}
+          aspect={aspect}
+          renderTile={(e) => <GridTile entry={e} aspect={aspect} />}
+        />
+        {hidden > 0 && (
+          <p className="text-sm text-muted">
+            {hidden} more {hidden === 1 ? "item isn't" : "items aren't"} shown in the grid.
+          </p>
+        )}
+      </div>
+    );
   }
   if (format === "ranked") {
     return (

@@ -45,7 +45,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       <p className="mt-1 text-sm text-muted">
         {mode === "signup" ? "Your friends will find you by your username." : "Log in to your lists."}
       </p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      {/* method="post": if submitted before hydration, never put credentials in the URL */}
+      <form onSubmit={onSubmit} method="post" className="mt-6 space-y-4">
         {mode === "signup" && (
           <>
             <div>

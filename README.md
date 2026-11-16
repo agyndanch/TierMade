@@ -74,10 +74,6 @@ src/
 - **Access rules:** the owner can always see a list. Anyone else needs either a direct share (friends only) or `visibility = friends` plus an accepted friendship. Only the owner can edit. Unfriending revokes direct shares.
 - **Taste match** is `30% × overlap (Jaccard) + 70% × agreement on shared items`. Agreement is a normalized Spearman footrule for ranked vs ranked, and mean tier distance for tier lists. Ranked lists get bucketed into tiers when compared with a tier list.
 
-## Local test accounts
-
-The local PGlite database created during development has two test accounts, `alice_test` (alice@example.test) and `bob_test` (bob@example.test), both with the password `tiermade-dev-pass`. They exist only in `.data/pglite`. Delete that folder and run `npm run db:migrate` to start fresh.
-
 ## Roadmap (stretch goals from the proposal)
 
 - Custom categories with manual entries

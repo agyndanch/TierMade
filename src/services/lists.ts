@@ -37,7 +37,7 @@ export async function getListDetail(listId: string, viewerId: string, d: DB = db
 export async function updateList(
   listId: string,
   userId: string,
-  patch: { title?: string; description?: string | null; visibility?: "private" | "friends" },
+  patch: Parameters<typeof listsRepo.updateList>[1],
   d: DB = db,
 ) {
   await getOwnedList(listId, userId, d);

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Lock, Users } from "lucide-react";
 import { CATEGORIES, isCategoryId } from "@/catalog/categories";
 import { HttpError } from "@/lib/errors";
+import type { ListDisplay } from "@/lib/list-display";
 import { requireUser } from "@/lib/session";
 import { listsByOwner, listsVisibleToUser } from "@/repositories/lists";
 import { getFriendsOverview } from "@/services/friends";
@@ -38,6 +39,12 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
   const { list, owner, tiers, entries, isOwner } = await load(id, user.id);
   const category = isCategoryId(list.category) ? CATEGORIES[list.category] : null;
   if (!category) notFound();
+  const display: ListDisplay = {
+    view: list.view,
+    gridColumns: list.gridColumns,
+    gridRows: list.gridRows,
+    showNumbers: list.showNumbers,
+  };
 
   // Lists this one can be compared against: same category, on the "other" side.
   const candidates: CompareCandidate[] = isOwner
@@ -105,10 +112,11 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
           format={list.format}
           tiers={tiers}
           initialEntries={entries}
+          initialDisplay={display}
           category={category}
         />
       ) : (
-        <StaticBoard format={list.format} tiers={tiers} entries={entries} aspect={category.aspect} />
+        <StaticBoard format={list.format} tiers={tiers} entries={entries} aspect={category.aspect} display={display} />
       )}
     </div>
   );

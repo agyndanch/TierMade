@@ -117,6 +117,47 @@ export const TierTile = forwardRef<
   );
 });
 
+/** A cover filling one cell of a ranked list's grid view. */
+export const GridTile = forwardRef<
+  HTMLDivElement,
+  HTMLAttributes<HTMLDivElement> & {
+    entry: EntryWithItem;
+    aspect: Aspect;
+    dragging?: boolean;
+    overlay?: boolean;
+    onRemove?: () => void;
+  }
+>(function GridTile({ entry, aspect, dragging, overlay, onRemove, className, ...rest }, ref) {
+  const { item } = entry;
+  const label = [item.title, item.subtitle, item.year].filter(Boolean).join(" · ");
+  return (
+    <div
+      ref={ref}
+      title={label}
+      className={cn(
+        "group relative min-w-0",
+        dragging && "opacity-40",
+        overlay && "rounded-md shadow-xl ring-2 ring-accent",
+        className,
+      )}
+      {...rest}
+    >
+      <Cover src={item.imageUrl} alt={item.title} aspect={aspect} className="w-full" />
+      {onRemove && (
+        <button
+          type="button"
+          aria-label={`Remove ${item.title}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onRemove}
+          className="absolute right-1 top-1 hidden rounded-full bg-foreground/90 p-0.5 text-background shadow group-hover:block group-focus-within:block"
+        >
+          <X className="size-3" />
+        </button>
+      )}
+    </div>
+  );
+});
+
 export function TierLabel({ label, color }: { label: string; color: string }) {
   return (
     <div

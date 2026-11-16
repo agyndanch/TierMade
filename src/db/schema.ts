@@ -75,6 +75,7 @@ export const verification = pgTable("verification", {
 
 export const listFormat = pgEnum("list_format", ["ranked", "tier"]);
 export const listVisibility = pgEnum("list_visibility", ["private", "friends"]);
+export const listView = pgEnum("list_view", ["list", "grid"]);
 export const friendshipStatus = pgEnum("friendship_status", [
   "pending",
   "accepted",
@@ -111,6 +112,11 @@ export const lists = pgTable(
     category: text("category").notNull(),
     format: listFormat("format").notNull().default("ranked"),
     visibility: listVisibility("visibility").notNull().default("private"),
+    /** Ranked lists only: a vertical list, or a cover grid with titles beside each row. */
+    view: listView("view").notNull().default("list"),
+    gridColumns: integer("grid_columns").notNull().default(5),
+    gridRows: integer("grid_rows").notNull().default(5),
+    showNumbers: boolean("show_numbers").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
