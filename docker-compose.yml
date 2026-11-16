@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tiermade
+      POSTGRES_PASSWORD: tiermade
+      POSTGRES_DB: tiermade
+    ports:
+      - "5432:5432"
+    volumes:
+      - tiermade-pg:/var/lib/postgresql/data
+
+volumes:
+  tiermade-pg:
