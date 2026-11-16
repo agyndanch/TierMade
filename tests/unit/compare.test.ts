@@ -79,6 +79,27 @@ describe("compareLists", () => {
     expect(compareLists(a, flipped).agreement).toBeCloseTo(1 - (1 + 0.5 + 0 + 0.5 + 1) / 5);
   });
 
+  it("ignores gaps in ranks and leaves Not ranked yet items out of agreement", () => {
+    // a: #1 a, #10 b, #11 c, pool d    b: #1 a, #2 b, #3 c, #4 d
+    const gappy: CompareSide = {
+      format: "ranked",
+      tierCount: 0,
+      entries: [
+        { itemId: "a", tierIndex: null, rank: 1 },
+        { itemId: "b", tierIndex: null, rank: 10 },
+        { itemId: "c", tierIndex: null, rank: 11 },
+        { itemId: "d", tierIndex: null, unranked: true },
+      ],
+    };
+    const r = compareLists(gappy, ranked("a", "b", "c", "d"));
+    expect(r.overlap).toBe(1); // d still counts as shared
+    expect(r.agreement).toBe(1); // a, b, c are in the same relative order
+    const d = r.shared.find((s) => s.itemId === "d")!;
+    expect(d.distance).toBeNull();
+    expect(d.a).toMatchObject({ unranked: true, rank: null });
+    expect(r.shared.find((s) => s.itemId === "b")!.a.rank).toBe(10);
+  });
+
   it("handles empty lists", () => {
     const r = compareLists(ranked(), ranked());
     expect(r.overlap).toBe(0);

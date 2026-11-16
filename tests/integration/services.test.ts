@@ -6,7 +6,7 @@ import { runMigrations } from "@/db/migrate";
 import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
 import { MAX_IMAGE_BYTES, imageIdFromUrl } from "@/lib/images";
-import { customEntrySchema, updateListSchema } from "@/lib/validation";
+import { customEntrySchema, reorderSchema, updateListSchema } from "@/lib/validation";
 import { findImage } from "@/repositories/images";
 import { listsVisibleToUser, listsByOwner } from "@/repositories/lists";
 import * as lists from "@/services/lists";
@@ -128,6 +128,83 @@ describe("lists", () => {
     const list = await lists.createList(alice, { title: "Mine", category: "films", format: "ranked", visibility: "private" });
     await expectStatus(lists.addItemToList(list.id, bob, "heat", null, adapterFor), 404);
     await expectStatus(lists.deleteList(list.id, bob), 404);
+  });
+});
+
+describe("ranked slots", () => {
+  const ranks = async (listId: string) => {
+    const { entries } = await lists.getListDetail(listId, alice);
+    return entries.map((e) => (e.unranked ? `${e.item.title}:pool` : `${e.item.title}:#${e.position + 1}`));
+  };
+
+  it("persists gaps and the Not ranked yet pool", async () => {
+    const list = await lists.createList(alice, { title: "Slots", category: "films", format: "ranked", visibility: "private" });
+    const [a, b, c] = [
+      await lists.addItemToList(list.id, alice, "inception", null, adapterFor),
+      await lists.addItemToList(list.id, alice, "heat", null, adapterFor),
+      await lists.addItemToList(list.id, alice, "alien", null, adapterFor),
+    ];
+    expect(await ranks(list.id)).toEqual(["Inception:#1", "Heat:#2", "Alien:#3"]);
+
+    await lists.reorderList(list.id, alice, [
+      { id: a.id, tierId: null, position: 0 },
+      { id: b.id, tierId: null, position: 9 },
+      { id: c.id, tierId: null, position: 0, unranked: true },
+    ]);
+    expect(await ranks(list.id)).toEqual(["Inception:#1", "Heat:#10", "Alien:pool"]);
+
+    // the next new item goes after the last ranked one, past the gap
+    await lists.addItemToList(list.id, alice, "jaws", null, adapterFor);
+    expect(await ranks(list.id)).toEqual(["Inception:#1", "Heat:#10", "Jaws:#11", "Alien:pool"]);
+  });
+
+  it("rejects shared ranks, ranks past #1000 and pools on tier lists", async () => {
+    const list = await lists.createList(alice, { title: "Bad slots", category: "films", format: "ranked", visibility: "private" });
+    const a = await lists.addItemToList(list.id, alice, "inception", null, adapterFor);
+    const b = await lists.addItemToList(list.id, alice, "heat", null, adapterFor);
+    await expectStatus(
+      lists.reorderList(list.id, alice, [
+        { id: a.id, tierId: null, position: 3 },
+        { id: b.id, tierId: null, position: 3 },
+      ]),
+      400,
+    );
+    await expectStatus(
+      lists.reorderList(list.id, alice, [
+        { id: a.id, tierId: null, position: 1000 },
+        { id: b.id, tierId: null, position: 0 },
+      ]),
+      400,
+    );
+    expect(() =>
+      reorderSchema.parse({ entries: [{ id: a.id, tierId: null, position: 1000 }] }),
+    ).toThrow();
+    // two pool items may share a pool position without clashing with ranks
+    await lists.reorderList(list.id, alice, [
+      { id: a.id, tierId: null, position: 0 },
+      { id: b.id, tierId: null, position: 0, unranked: true },
+    ]);
+
+    const tierList = await lists.createList(alice, { title: "T", category: "films", format: "tier", visibility: "private" });
+    const t = await lists.addItemToList(tierList.id, alice, "heat", null, adapterFor);
+    expect(t.unranked).toBe(false);
+    await expectStatus(lists.reorderList(tierList.id, alice, [{ id: t.id, tierId: null, position: 0, unranked: true }]), 400);
+  });
+
+  it("sends new items to Not ranked yet once a grid is full, but not in list view", async () => {
+    const list = await lists.createList(alice, { title: "Small grid", category: "films", format: "ranked", visibility: "private" });
+    await lists.updateList(list.id, alice, { view: "grid", gridColumns: 1, gridRows: 2 });
+    await lists.addItemToList(list.id, alice, "inception", null, adapterFor);
+    await lists.addItemToList(list.id, alice, "heat", null, adapterFor);
+    const third = await lists.addItemToList(list.id, alice, "alien", null, adapterFor);
+    expect(third.unranked).toBe(true);
+    const custom = await lists.addCustomItemToList(list.id, alice, { title: "Home video", creator: null });
+    expect(custom.unranked).toBe(true);
+    expect(await ranks(list.id)).toEqual(["Inception:#1", "Heat:#2", "Alien:pool", "Home video:pool"]);
+
+    await lists.updateList(list.id, alice, { view: "list" });
+    const fourth = await lists.addItemToList(list.id, alice, "jaws", null, adapterFor);
+    expect(fourth).toMatchObject({ unranked: false, position: 2 });
   });
 });
 

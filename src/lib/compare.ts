@@ -2,8 +2,10 @@
  * Pure list-comparison scoring. No I/O — unit tested in compare.test.ts.
  *
  * Every entry is reduced to a "placement":
- *   - ranked lists: its 0-based order in the list
+ *   - ranked lists: its order in the list (ranks can have gaps; only the
+ *     relative order matters), or "not ranked yet"
  *   - tier lists:   its tier index (0 = top tier), or null if still unsorted
+ * Not-ranked-yet / unsorted items count toward overlap but not agreement.
  */
 
 export type CompareFormat = "ranked" | "tier";
@@ -12,14 +14,25 @@ export type CompareSide = {
   format: CompareFormat;
   /** number of tiers (tier lists only) */
   tierCount: number;
-  /** entries in display order */
-  entries: { itemId: string; tierIndex: number | null }[];
+  /** entries in display order (ranked: by slot, "not ranked yet" last) */
+  entries: {
+    itemId: string;
+    tierIndex: number | null;
+    /** ranked lists: the displayed rank (#), which can skip numbers */
+    rank?: number | null;
+    /** ranked lists: waiting in "Not ranked yet" */
+    unranked?: boolean;
+  }[];
 };
 
 export type Placement = {
   /** 1-based position in display order */
   position: number;
   tierIndex: number | null;
+  /** ranked lists: displayed rank (#); null when not ranked yet, or for tier lists */
+  rank: number | null;
+  /** ranked lists: waiting in "Not ranked yet" */
+  unranked: boolean;
 };
 
 export type SharedItem = {
@@ -45,7 +58,16 @@ export type ComparisonResult = {
 
 function placements(side: CompareSide): Map<string, Placement> {
   const m = new Map<string, Placement>();
-  side.entries.forEach((e, i) => m.set(e.itemId, { position: i + 1, tierIndex: side.format === "tier" ? e.tierIndex : null }));
+  side.entries.forEach((e, i) => {
+    const ranked = side.format === "ranked";
+    const unranked = ranked && Boolean(e.unranked);
+    m.set(e.itemId, {
+      position: i + 1,
+      tierIndex: ranked ? null : e.tierIndex,
+      rank: ranked && !unranked ? (e.rank ?? i + 1) : null,
+      unranked,
+    });
+  });
   return m;
 }
 
@@ -60,11 +82,14 @@ function normalizedScores(
   otherSide: CompareSide,
 ): Map<string, number | null> {
   const out = new Map<string, number | null>();
-  const n = sharedIds.length;
   if (side.format === "ranked") {
-    // sharedIds arrive in this side's order? Not necessarily — sort by this side's position.
+    // Only ranked items are scored; "not ranked yet" ones have no opinion yet.
     const pos = placements(side);
-    const ordered = [...sharedIds].sort((x, y) => pos.get(x)!.position - pos.get(y)!.position);
+    for (const id of sharedIds) if (pos.get(id)!.unranked) out.set(id, null);
+    const ordered = sharedIds
+      .filter((id) => !pos.get(id)!.unranked)
+      .sort((x, y) => pos.get(x)!.position - pos.get(y)!.position);
+    const n = ordered.length;
     ordered.forEach((id, i) => {
       if (otherSide.format === "tier" && otherSide.tierCount > 1) {
         const bucket = Math.min(otherSide.tierCount - 1, Math.floor((i * otherSide.tierCount) / n));

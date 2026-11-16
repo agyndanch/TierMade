@@ -16,30 +16,20 @@ import {
   type DragStartEvent,
   type UniqueIdentifier,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ListTier } from "@/db/schema";
 import type { EntryWithItem } from "@/repositories/entries";
 import { cn } from "@/lib/utils";
-import type { ListDisplay } from "@/lib/list-display";
-import { GridTile, RankedRow, TierLabel, TierTile } from "./entry-views";
-import { RankedGrid } from "./ranked-grid";
+import { TierLabel, TierTile } from "./entry-views";
 
-export const RANKED = "ranked";
+/** Tier lists' unsorted pool. (Ranked lists use ranked-editor.tsx.) */
 export const UNSORTED = "unsorted";
 
-/** containerId → entries in order. Container ids are tier ids, "ranked" or "unsorted". */
+/** containerId → entries in order. Container ids are tier ids or "unsorted". */
 export type Containers = Record<string, EntryWithItem[]>;
 
-export function toContainers(format: "ranked" | "tier", tiers: ListTier[], entries: EntryWithItem[]): Containers {
-  if (format === "ranked") return { [RANKED]: entries };
+export function toContainers(tiers: ListTier[], entries: EntryWithItem[]): Containers {
   const c: Containers = Object.fromEntries(tiers.map((t) => [t.id, [] as EntryWithItem[]]));
   c[UNSORTED] = [];
   for (const e of entries) (e.tierId && c[e.tierId] ? c[e.tierId] : c[UNSORTED]).push(e);
@@ -50,8 +40,9 @@ export function toOrderPayload(containers: Containers) {
   return Object.entries(containers).flatMap(([cid, list]) =>
     list.map((e, position) => ({
       id: e.id,
-      tierId: cid === RANKED || cid === UNSORTED ? null : cid,
+      tierId: cid === UNSORTED ? null : cid,
       position,
+      unranked: false,
     })),
   );
 }
@@ -62,20 +53,17 @@ function findContainer(containers: Containers, id: UniqueIdentifier): string | u
   return Object.keys(containers).find((cid) => containers[cid].some((e) => e.id === key));
 }
 
-export function EditorBoard({
-  format,
+/** Owner's tier-list editor: drag covers between tiers and the unsorted pool. */
+export function TierBoard({
   tiers,
   aspect,
-  display,
   containers,
   onChange,
   onCommit,
   onRemove,
 }: {
-  format: "ranked" | "tier";
   tiers: ListTier[];
   aspect: "square" | "portrait";
-  display: ListDisplay;
   containers: Containers;
   /** live updates while dragging */
   onChange: (next: Containers) => void;
@@ -139,83 +127,16 @@ export function EditorBoard({
     onCommit(next);
   }
 
-  const dnd = {
-    id: dndId,
-    sensors,
-    collisionDetection: closestCorners,
-    onDragStart: handleDragStart,
-    onDragOver: handleDragOver,
-    onDragEnd: handleDragEnd,
-    onDragCancel: () => setActiveId(null),
-  };
-
-  if (format === "ranked" && display.view === "grid") {
-    const items = containers[RANKED] ?? [];
-    const overflow = items.slice(display.gridColumns * display.gridRows);
-    return (
-      <DndContext {...dnd}>
-        <SortableContext items={items.map((e) => e.id)} strategy={rectSortingStrategy}>
-          <RankedGrid
-            entries={items}
-            display={display}
-            aspect={aspect}
-            renderTile={(e, i) => <SortableGridTile entry={e} rank={i + 1} aspect={aspect} onRemove={() => onRemove(e)} />}
-          />
-          {overflow.length > 0 && (
-            <div className="mt-4">
-              <p className="mb-2 text-sm font-medium text-muted">
-                Not in the grid ({overflow.length}): drag these in, or make the grid bigger
-              </p>
-              <div
-                className="grid gap-1.5 rounded-xl border border-dashed border-border p-2"
-                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))" }}
-              >
-                {overflow.map((e, i) => (
-                  <SortableGridTile
-                    key={e.id}
-                    entry={e}
-                    rank={display.gridColumns * display.gridRows + i + 1}
-                    aspect={aspect}
-                    onRemove={() => onRemove(e)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </SortableContext>
-        <DragOverlay>{activeEntry ? <GridTile entry={activeEntry} aspect={aspect} overlay /> : null}</DragOverlay>
-      </DndContext>
-    );
-  }
-
-  if (format === "ranked") {
-    const items = containers[RANKED] ?? [];
-    return (
-      <DndContext {...dnd}>
-        <SortableContext items={items.map((e) => e.id)} strategy={verticalListSortingStrategy}>
-          <ol className="space-y-2" aria-label="Ranked items">
-            {items.map((e, i) => (
-              <SortableRankedRow key={e.id} entry={e} rank={i + 1} aspect={aspect} onRemove={() => onRemove(e)} />
-            ))}
-          </ol>
-        </SortableContext>
-        <DragOverlay>
-          {activeEntry ? (
-            <RankedRow
-              entry={activeEntry}
-              rank={items.findIndex((e) => e.id === activeEntry.id) + 1}
-              aspect={aspect}
-              overlay
-              handleProps={{}}
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-    );
-  }
-
   return (
-    <DndContext {...dnd}>
+    <DndContext
+      id={dndId}
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
+    >
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         {tiers.map((t) => (
           <div key={t.id} className="flex min-h-24 border-b border-border last:border-b-0 sm:min-h-28">
@@ -267,62 +188,6 @@ function TierDropZone({
         {entries.length === 0 && emptyText && <p className="self-center px-2 text-sm text-muted">{emptyText}</p>}
       </div>
     </SortableContext>
-  );
-}
-
-function SortableRankedRow({
-  entry,
-  rank,
-  aspect,
-  onRemove,
-}: {
-  entry: EntryWithItem;
-  rank: number;
-  aspect: "square" | "portrait";
-  onRemove: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
-    id: entry.id,
-  });
-  return (
-    <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }}>
-      <RankedRow
-        entry={entry}
-        rank={rank}
-        aspect={aspect}
-        dragging={isDragging}
-        onRemove={onRemove}
-        handleProps={{ ...attributes, ...listeners, ref: setActivatorNodeRef } as React.HTMLAttributes<HTMLButtonElement>}
-      />
-    </li>
-  );
-}
-
-function SortableGridTile({
-  entry,
-  rank,
-  aspect,
-  onRemove,
-}: {
-  entry: EntryWithItem;
-  rank: number;
-  aspect: "square" | "portrait";
-  onRemove: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
-  return (
-    <GridTile
-      ref={setNodeRef}
-      entry={entry}
-      aspect={aspect}
-      dragging={isDragging}
-      onRemove={onRemove}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className="touch-none cursor-grab active:cursor-grabbing"
-      aria-label={`#${rank} ${entry.item.title}. Press space to pick up, arrow keys to move.`}
-      {...attributes}
-      {...listeners}
-    />
   );
 }
 

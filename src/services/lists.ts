@@ -60,14 +60,36 @@ async function assertTierOnList(list: List, tierId: string | null | undefined, d
   if (!tiers.some((t) => t.id === tierId)) throw badRequest("Unknown tier");
 }
 
+/** Highest slot a ranked-list item can occupy (0-based), i.e. #1000. */
+export const MAX_SLOT = 999;
+
+/**
+ * Where a newly added item goes. Tier lists: end of the given tier (or the
+ * unsorted pool). Ranked lists: the slot after the last ranked item, unless
+ * the list is shown as a grid and that slot is past the grid, in which case
+ * it waits in "Not ranked yet".
+ */
+async function placementForNewEntry(list: List, tierId: string | null, d: DB): Promise<entriesRepo.Placement> {
+  if (list.format === "tier") {
+    return { tierId, unranked: false, position: await entriesRepo.nextPosition(list.id, { tierId, unranked: false }, d) };
+  }
+  const slot = await entriesRepo.nextPosition(list.id, { tierId: null, unranked: false }, d);
+  const pastGrid = list.view === "grid" && slot >= list.gridColumns * list.gridRows;
+  if (pastGrid || slot > MAX_SLOT) {
+    return { tierId: null, unranked: true, position: await entriesRepo.nextPosition(list.id, { tierId: null, unranked: true }, d) };
+  }
+  return { tierId: null, unranked: false, position: slot };
+}
+
 function toEntryWithItem(
-  entry: { id: string; tierId: string | null; position: number },
+  entry: { id: string; tierId: string | null; position: number; unranked: boolean },
   item: Item,
 ): entriesRepo.EntryWithItem {
   return {
     id: entry.id,
     tierId: entry.tierId,
     position: entry.position,
+    unranked: entry.unranked,
     item: {
       id: item.id,
       externalId: item.externalId,
@@ -118,7 +140,8 @@ export async function addCustomItemToList(listId: string, userId: string, input:
       { category: list.category, title: input.title, subtitle: input.creator, imageUrl, createdBy: userId },
       tx,
     );
-    const entry = await entriesRepo.appendEntry(list.id, item.id, input.tierId ?? null, tx);
+    const at = await placementForNewEntry(list, input.tierId ?? null, tx);
+    const entry = await entriesRepo.insertEntry(list.id, item.id, at, tx);
     return { entry, item };
   });
   await listsRepo.touchList(list.id, d);
@@ -152,7 +175,8 @@ export async function addItemToList(
     throw conflict(`"${item.title}" is already on this list`);
   }
   try {
-    const entry = await entriesRepo.appendEntry(list.id, item.id, tierId ?? null, d);
+    const at = await placementForNewEntry(list, tierId ?? null, d);
+    const entry = await entriesRepo.insertEntry(list.id, item.id, at, d);
     await listsRepo.touchList(list.id, d);
     return toEntryWithItem(entry, item);
   } catch (e) {
@@ -177,7 +201,7 @@ export async function removeEntry(listId: string, userId: string, entryId: strin
 export async function reorderList(
   listId: string,
   userId: string,
-  order: { id: string; tierId: string | null; position: number }[],
+  order: { id: string; tierId: string | null; position: number; unranked?: boolean }[],
   d: DB = db,
 ) {
   const list = await getOwnedList(listId, userId, d);
@@ -188,14 +212,26 @@ export async function reorderList(
   const entryIds = new Set(entries.map((e) => e.id));
   const tierIds = new Set(tiers.map((t) => t.id));
   const seen = new Set<string>();
+  const slotsTaken = new Set<number>();
   for (const e of order) {
     if (!entryIds.has(e.id)) throw badRequest("Order contains an entry that isn't on this list");
     if (seen.has(e.id)) throw badRequest("Order contains a duplicate entry");
     seen.add(e.id);
     if (e.tierId !== null && (list.format !== "tier" || !tierIds.has(e.tierId))) throw badRequest("Unknown tier");
+    if (e.unranked && list.format !== "ranked") throw badRequest("Only ranked lists have a Not ranked yet area");
+    if (list.format === "ranked" && !e.unranked) {
+      // Ranked slots can have gaps but never hold two items.
+      if (e.position > MAX_SLOT) throw badRequest(`Ranks go up to #${MAX_SLOT + 1}`);
+      if (slotsTaken.has(e.position)) throw badRequest("Two items can't share a rank");
+      slotsTaken.add(e.position);
+    }
   }
   if (seen.size !== entryIds.size) throw badRequest("Order must include every entry on the list");
-  await entriesRepo.applyOrder(list.id, order, d);
+  await entriesRepo.applyOrder(
+    list.id,
+    order.map((e) => ({ id: e.id, tierId: e.tierId, position: e.position, unranked: Boolean(e.unranked) })),
+    d,
+  );
   await listsRepo.touchList(list.id, d);
 }
 

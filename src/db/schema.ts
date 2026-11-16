@@ -158,7 +158,13 @@ export const listEntries = pgTable(
       .references(() => items.id, { onDelete: "restrict" }),
     /** null = ranked list, or the "unsorted" pool of a tier list */
     tierId: uuid("tier_id").references(() => listTiers.id, { onDelete: "set null" }),
+    /**
+     * Ranked lists: the 0-based slot (unique per list, gaps allowed), or, when
+     * `unranked`, the order within the "Not ranked yet" pool. Tier lists: order within the tier.
+     */
     position: integer("position").notNull(),
+    /** ranked lists only: waiting in the "Not ranked yet" pool */
+    unranked: boolean("unranked").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

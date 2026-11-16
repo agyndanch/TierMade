@@ -1,18 +1,23 @@
 "use client";
 
-import { LayoutGrid, List as ListIcon, Minus, Plus } from "lucide-react";
+import { LayoutGrid, List as ListIcon, Minus, Plus, Rows3 } from "lucide-react";
 import { GRID_MAX, GRID_MIN, clampGrid, type ListDisplay } from "@/lib/list-display";
 import { cn } from "@/lib/utils";
 
-/** List/grid switch plus grid size and numbering options for a ranked list. */
+/** List/grid switch, grid size and numbering options, and "remove gaps" for a ranked list. */
 export function DisplayControls({
   display,
   onChange,
-  itemCount,
+  filledSpots,
+  hasGaps,
+  onRemoveGaps,
 }: {
   display: ListDisplay;
   onChange: (next: ListDisplay) => void;
-  itemCount: number;
+  /** grid spots that hold an item */
+  filledSpots: number;
+  hasGaps: boolean;
+  onRemoveGaps: () => void;
 }) {
   const set = (patch: Partial<ListDisplay>) => onChange({ ...display, ...patch });
   const isGrid = display.view === "grid";
@@ -56,9 +61,19 @@ export function DisplayControls({
             Numbers
           </label>
           <span className="text-xs text-muted">
-            {Math.min(itemCount, capacity)} of {capacity} spots filled
+            {filledSpots} of {capacity} spots filled
           </span>
         </>
+      )}
+      {hasGaps && (
+        <button
+          type="button"
+          onClick={onRemoveGaps}
+          title="Move everything up so the ranks have no empty slots"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted hover:bg-surface-2 hover:text-foreground"
+        >
+          <Rows3 className="size-3.5" /> Remove gaps
+        </button>
       )}
     </div>
   );

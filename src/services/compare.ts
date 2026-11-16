@@ -17,6 +17,8 @@ function toSide(detail: ListDetail): CompareSide {
     entries: detail.entries.map((e) => ({
       itemId: e.item.id,
       tierIndex: e.tierId ? (tierIndex.get(e.tierId) ?? null) : null,
+      rank: detail.list.format === "ranked" && !e.unranked ? e.position + 1 : null,
+      unranked: detail.list.format === "ranked" && e.unranked,
     })),
   };
 }

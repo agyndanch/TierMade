@@ -6,47 +6,42 @@ import { cn } from "@/lib/utils";
 type Aspect = "square" | "portrait";
 
 /**
- * A ranked list laid out as a cover grid (columns × rows), with the titles of
- * each row's items listed beside it, numbered or not. Entries beyond the grid's
- * capacity are not rendered here; callers decide how to show the overflow.
+ * A ranked list's slots laid out as a cover grid (columns × rows), with the
+ * titles of each row's items listed beside it, numbered by their real rank or
+ * not. Slots can be empty. Ranks past the grid's capacity aren't rendered here.
  */
 export function RankedGrid({
-  entries,
+  slots,
   display,
-  aspect,
-  renderTile,
+  renderCell,
 }: {
-  entries: EntryWithItem[];
+  /** index = slot (rank − 1); null = empty */
+  slots: (EntryWithItem | null)[];
   display: Pick<ListDisplay, "gridColumns" | "gridRows" | "showNumbers">;
-  aspect: Aspect;
-  renderTile: (entry: EntryWithItem, index: number) => ReactNode;
+  /** renders one cell: a cover, or an empty slot */
+  renderCell: (entry: EntryWithItem | null, slot: number) => ReactNode;
 }) {
   const { gridColumns: cols, gridRows: rows, showNumbers } = display;
-  const shown = entries.slice(0, cols * rows);
 
   return (
     <div className="rounded-xl border border-border bg-surface p-2 sm:p-3" aria-label="Ranked grid">
       <div className="flex flex-col gap-1.5">
         {Array.from({ length: rows }, (_, r) => {
           const start = r * cols;
-          const rowEntries = shown.slice(start, start + cols);
+          const cells = Array.from({ length: cols }, (_, c) => slots[start + c] ?? null);
+          const titled = cells.flatMap((e, c) => (e ? [{ e, rank: start + c + 1 }] : []));
           return (
             <div key={r} className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,13rem)]">
               <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-                {Array.from({ length: cols }, (_, c) => {
-                  const entry = rowEntries[c];
-                  return entry ? (
-                    <Fragment key={entry.id}>{renderTile(entry, start + c)}</Fragment>
-                  ) : (
-                    <EmptySlot key={`empty-${start + c}`} aspect={aspect} />
-                  );
-                })}
+                {cells.map((e, c) => (
+                  <Fragment key={e?.id ?? `empty-${start + c}`}>{renderCell(e, start + c)}</Fragment>
+                ))}
               </div>
-              {rowEntries.length > 0 && (
+              {titled.length > 0 && (
                 <ol className="min-w-0 self-start pb-1 text-xs leading-[1.15rem] sm:pb-0" aria-label={`Row ${r + 1} titles`}>
-                  {rowEntries.map((e, i) => (
+                  {titled.map(({ e, rank }) => (
                     <li key={e.id} className="truncate">
-                      {showNumbers && <span className="mr-1 tabular-nums text-muted">{start + i + 1}.</span>}
+                      {showNumbers && <span className="mr-1 tabular-nums text-muted">{rank}.</span>}
                       <span className="font-medium">{e.item.title}</span>
                       {e.item.subtitle && <span className="text-muted"> · {e.item.subtitle}</span>}
                     </li>
@@ -61,14 +56,29 @@ export function RankedGrid({
   );
 }
 
-function EmptySlot({ aspect }: { aspect: Aspect }) {
+/** Placeholder for an empty slot (also the drop-target look in the editor). */
+export function EmptySlot({
+  aspect,
+  rank,
+  highlight,
+  className,
+}: {
+  aspect: Aspect;
+  rank?: number;
+  highlight?: boolean;
+  className?: string;
+}) {
   return (
     <div
-      aria-hidden
+      aria-label={rank ? `Empty slot #${rank}` : undefined}
       className={cn(
-        "rounded-md border border-dashed border-border bg-surface-2/50",
+        "flex items-center justify-center rounded-md border border-dashed border-border bg-surface-2/50 text-[10px] tabular-nums text-muted/60 transition-colors",
         aspect === "square" ? "aspect-square" : "aspect-[2/3]",
+        highlight && "border-accent bg-accent-soft text-accent",
+        className,
       )}
-    />
+    >
+      {rank}
+    </div>
   );
 }

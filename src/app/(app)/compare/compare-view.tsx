@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 type Side = { list: List; owner: PublicUser; tiers: ListTier[]; entries: EntryWithItem[] };
 
 function placementLabel(p: Placement, side: Side) {
-  if (side.list.format === "ranked") return `#${p.position}`;
+  if (side.list.format === "ranked") return p.unranked ? "Not ranked" : `#${p.rank ?? p.position}`;
   if (p.tierIndex === null) return "Unsorted";
   return side.tiers[p.tierIndex]?.label ?? "?";
 }
@@ -187,7 +187,19 @@ function CompareColumn({
   };
 
   if (side.list.format === "ranked") {
-    return <ol className="space-y-1.5">{side.entries.map((e, i) => row(e, String(i + 1)))}</ol>;
+    const ranked = side.entries.filter((e) => !e.unranked);
+    const pool = side.entries.filter((e) => e.unranked);
+    return (
+      <div className="space-y-3">
+        <ol className="space-y-1.5">{ranked.map((e) => row(e, String(e.position + 1)))}</ol>
+        {pool.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Not ranked yet</p>
+            <ul className="space-y-1.5">{pool.map((e) => row(e, "–"))}</ul>
+          </div>
+        )}
+      </div>
+    );
   }
 
   const groups = [

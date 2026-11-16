@@ -6,6 +6,8 @@ export type EntryWithItem = {
   id: string;
   tierId: string | null;
   position: number;
+  /** ranked lists: in the "Not ranked yet" pool */
+  unranked: boolean;
   item: {
     id: string;
     externalId: string;
@@ -20,13 +22,14 @@ export async function tiersForList(listId: string, d: DB = db): Promise<ListTier
   return d.select().from(listTiers).where(eq(listTiers.listId, listId)).orderBy(asc(listTiers.position));
 }
 
-/** Entries in display order: by tier position (unsorted last), then position. */
+/** Entries in display order: ranked pool last, then by tier position (unsorted last), then position. */
 export async function entriesForList(listId: string, d: DB = db): Promise<EntryWithItem[]> {
   const rows = await d
     .select({
       id: listEntries.id,
       tierId: listEntries.tierId,
       position: listEntries.position,
+      unranked: listEntries.unranked,
       item: {
         id: items.id,
         externalId: items.externalId,
@@ -40,7 +43,7 @@ export async function entriesForList(listId: string, d: DB = db): Promise<EntryW
     .innerJoin(items, eq(items.id, listEntries.itemId))
     .leftJoin(listTiers, eq(listTiers.id, listEntries.tierId))
     .where(eq(listEntries.listId, listId))
-    .orderBy(asc(sql`coalesce(${listTiers.position}, 999)`), asc(listEntries.position));
+    .orderBy(asc(listEntries.unranked), asc(sql`coalesce(${listTiers.position}, 999)`), asc(listEntries.position));
   return rows;
 }
 
@@ -62,16 +65,29 @@ export async function entryExistsForItem(listId: string, itemId: string, d: DB =
   return rows.length > 0;
 }
 
-/** Appends the item to the end of its group (the tier, or the whole ranked list). */
-export async function appendEntry(listId: string, itemId: string, tierId: string | null, d: DB = db) {
-  const groupFilter = tierId ? eq(listEntries.tierId, tierId) : isNull(listEntries.tierId);
+export type Placement = { tierId: string | null; position: number; unranked: boolean };
+
+/**
+ * max(position) + 1 within a group: one tier, a tier list's unsorted pool
+ * (tierId null), a ranked list's slots, or its "Not ranked yet" pool.
+ */
+export async function nextPosition(
+  listId: string,
+  group: { tierId: string | null; unranked: boolean },
+  d: DB = db,
+): Promise<number> {
+  const tierFilter = group.tierId ? eq(listEntries.tierId, group.tierId) : isNull(listEntries.tierId);
   const [{ next }] = await d
     .select({ next: sql<number>`coalesce(max(${listEntries.position}) + 1, 0)::int` })
     .from(listEntries)
-    .where(and(eq(listEntries.listId, listId), groupFilter));
+    .where(and(eq(listEntries.listId, listId), tierFilter, eq(listEntries.unranked, group.unranked)));
+  return Number(next);
+}
+
+export async function insertEntry(listId: string, itemId: string, at: Placement, d: DB = db) {
   const [row] = await d
     .insert(listEntries)
-    .values({ listId, itemId, tierId, position: Number(next) })
+    .values({ listId, itemId, ...at })
     .returning();
   return row;
 }
@@ -84,17 +100,17 @@ export async function deleteEntry(listId: string, entryId: string, d: DB = db) {
   return rows.length > 0;
 }
 
-/** Rewrites tier + position for every given entry in one transaction. */
+/** Rewrites tier + position (+ pool flag) for every given entry in one transaction. */
 export async function applyOrder(
   listId: string,
-  order: { id: string; tierId: string | null; position: number }[],
+  order: ({ id: string } & Placement)[],
   d: DB = db,
 ) {
   await d.transaction(async (tx) => {
     for (const e of order) {
       await tx
         .update(listEntries)
-        .set({ tierId: e.tierId, position: e.position })
+        .set({ tierId: e.tierId, position: e.position, unranked: e.unranked })
         .where(and(eq(listEntries.listId, listId), eq(listEntries.id, e.id)));
     }
   });

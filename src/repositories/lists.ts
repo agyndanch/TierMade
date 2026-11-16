@@ -89,7 +89,7 @@ async function attachCovers(
     .innerJoin(items, eq(items.id, listEntries.itemId))
     .leftJoin(listTiers, eq(listTiers.id, listEntries.tierId))
     .where(inArray(listEntries.listId, ids))
-    .orderBy(asc(sql`coalesce(${listTiers.position}, 999)`), asc(listEntries.position));
+    .orderBy(asc(listEntries.unranked), asc(sql`coalesce(${listTiers.position}, 999)`), asc(listEntries.position));
   const covers = new Map<string, string[]>();
   for (const c of coverRows) {
     if (!c.imageUrl) continue;

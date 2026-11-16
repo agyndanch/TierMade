@@ -48,7 +48,9 @@ export const reorderSchema = z.object({
       z.object({
         id: z.uuid(),
         tierId: z.uuid().nullable(),
-        position: z.number().int().min(0),
+        position: z.number().int().min(0).max(999),
+        /** ranked lists: in the "Not ranked yet" pool */
+        unranked: z.boolean().default(false),
       }),
     )
     .max(1000),

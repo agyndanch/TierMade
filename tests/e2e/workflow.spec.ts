@@ -41,10 +41,14 @@ test("create, rank, befriend, share and compare", async ({ browser }) => {
   await signUp(a, alice);
   await createList(a, "Alice's albums", "Ranked list");
   for (const q of ["in rainbows radiohead", "discovery daft punk", "blonde frank ocean"]) await addAlbum(a, q);
-  const rows = a.getByRole("list", { name: "Ranked items" }).getByRole("listitem");
+  // Ranked lists also render empty slots; count only the rows holding an item.
+  const rows = a
+    .getByRole("list", { name: "Ranked items" })
+    .getByRole("listitem")
+    .filter({ has: a.getByRole("button", { name: /Drag to reorder/ }) });
   await expect(rows).toHaveCount(3);
 
-  // Reorder with the keyboard: move #3 to #1, then confirm it persisted
+  // Reorder with the keyboard: move #3 onto slot #1 (the others shift down), then confirm it persisted
   const lastHandle = a.getByRole("button", { name: /Drag to reorder Blonde/ });
   await lastHandle.focus();
   await a.keyboard.press("Space");

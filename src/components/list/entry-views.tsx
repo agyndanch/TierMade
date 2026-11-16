@@ -19,8 +19,13 @@ export const RankedRow = forwardRef<
     onRemove?: () => void;
     highlight?: boolean;
     badge?: React.ReactNode;
+    /** replaces the plain rank number (e.g. with a "move to #" control) */
+    rankControl?: React.ReactNode;
   }
->(function RankedRow({ entry, rank, aspect, dragging, overlay, handleProps, onRemove, highlight, badge, className, ...rest }, ref) {
+>(function RankedRow(
+  { entry, rank, aspect, dragging, overlay, handleProps, onRemove, highlight, badge, rankControl, className, ...rest },
+  ref,
+) {
   const { item } = entry;
   return (
     <div
@@ -44,7 +49,7 @@ export const RankedRow = forwardRef<
           <GripVertical className="size-4" />
         </button>
       )}
-      <span className="w-7 shrink-0 text-center text-lg font-bold tabular-nums text-muted">{rank}</span>
+      {rankControl ?? <span className="w-7 shrink-0 text-center text-lg font-bold tabular-nums text-muted">{rank}</span>}
       <Cover src={item.imageUrl} alt={item.title} aspect={aspect} className={aspect === "square" ? "w-12" : "w-10"} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium">{item.title}</p>
