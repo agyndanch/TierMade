@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/session";
 import { listsByOwner, listsVisibleToUser } from "@/repositories/lists";
 import { getFriendsOverview } from "@/services/friends";
 import { getListDetail, getShares } from "@/services/lists";
-import { Badge } from "@/components/ui";
+import { Avatar, Badge } from "@/components/ui";
 import { ListEditor } from "@/components/list/list-editor";
 import { StaticBoard } from "@/components/list/static-board";
 import { EditableTitle, OwnerActions } from "@/components/list/list-toolbar";
@@ -77,7 +77,10 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
                   {list.visibility === "private" ? "Private" : "Friends can see"}
                 </span>
               ) : (
-                <span className="text-xs">by @{owner.username}</span>
+                <Link href={`/u/${owner.username}`} className="inline-flex items-center gap-1.5 text-xs hover:text-foreground">
+                  <Avatar name={owner.name || owner.username} src={owner.image} className="size-5 text-[10px]" />
+                  by @{owner.username}
+                </Link>
               )}
             </div>
           </div>

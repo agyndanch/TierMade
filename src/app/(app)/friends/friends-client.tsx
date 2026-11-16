@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Check, UserPlus, X } from "lucide-react";
@@ -13,11 +14,13 @@ import { api } from "@/lib/utils";
 function UserRow({ user, children }: { user: PublicUser; children?: React.ReactNode }) {
   return (
     <li className="flex items-center gap-3 py-2.5">
-      <Avatar name={user.name || user.username} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{user.name}</p>
-        <p className="truncate text-xs text-muted">@{user.username}</p>
-      </div>
+      <Link href={`/u/${user.username}`} className="group flex min-w-0 flex-1 items-center gap-3">
+        <Avatar name={user.name || user.username} src={user.image} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium group-hover:text-accent">{user.name}</span>
+          <span className="block truncate text-xs text-muted">@{user.username}</span>
+        </span>
+      </Link>
       <div className="flex shrink-0 gap-1.5">{children}</div>
     </li>
   );

@@ -106,7 +106,12 @@ export function CompareView({
           return (
             <section key={key} className={cn(mobileSide !== key && "hidden md:block")}>
               <header className="mb-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">{who(side)}</p>
+                <Link
+                  href={`/u/${side.owner.username}`}
+                  className="text-xs font-semibold uppercase tracking-wide text-muted hover:text-foreground"
+                >
+                  {who(side)}
+                </Link>
                 <Link href={`/lists/${side.list.id}`} className="font-semibold hover:text-accent">
                   {side.list.title}
                 </Link>

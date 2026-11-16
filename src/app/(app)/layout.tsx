@@ -26,10 +26,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             )}
           </NavLink>
           <div className="ml-auto flex items-center gap-2">
-            <span className="hidden items-center gap-2 text-sm sm:flex">
-              <Avatar name={user.name || user.username} className="size-7 text-xs" />
-              <span className="text-muted">@{user.username}</span>
-            </span>
+            <Link
+              href={`/u/${user.username}`}
+              aria-label="Your profile"
+              className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-sm hover:bg-surface-2"
+            >
+              <Avatar name={user.name || user.username} src={user.image} className="size-7 text-xs" />
+              <span className="hidden text-muted sm:inline">@{user.username}</span>
+            </Link>
             <SignOutButton />
           </div>
         </div>

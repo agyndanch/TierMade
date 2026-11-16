@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/session";
-import { listsByOwner, listsVisibleToUser } from "@/repositories/lists";
+import { listsByOwner, searchLists } from "@/repositories/lists";
 import { ListCard } from "@/components/list-card";
 import { buttonClass } from "@/components/ui";
 
@@ -9,7 +9,8 @@ export const metadata = { title: "Your lists" };
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [mine, shared] = await Promise.all([listsByOwner(user.id), listsVisibleToUser(user.id)]);
+  const [mine, recent] = await Promise.all([listsByOwner(user.id), searchLists(user.id, { limit: 8 })]);
+  const { lists: shared, hasMore: hasMoreShared } = recent;
 
   return (
     <div className="space-y-10">
@@ -38,7 +39,14 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <h2 className="mb-4 text-lg font-semibold">From your friends</h2>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold">Recently updated by friends</h2>
+          {shared.length > 0 && (
+            <Link href="/friends/lists" className="text-sm font-medium text-accent hover:underline">
+              {hasMoreShared ? "See all" : "Search & filter"} →
+            </Link>
+          )}
+        </div>
         {shared.length === 0 ? (
           <p className="text-sm text-muted">
             Lists your friends share with you show up here.{" "}

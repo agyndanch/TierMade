@@ -71,17 +71,23 @@ export function Badge({ className, ...props }: HTMLAttributes<HTMLSpanElement>) 
   );
 }
 
-export function Avatar({ name, className }: { name: string; className?: string }) {
+/** Profile photo when there is one, otherwise the first letter of the name. */
+export function Avatar({ name, src, className }: { name: string; src?: string | null; className?: string }) {
   const initial = (name || "?").trim().charAt(0).toUpperCase();
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent",
+        "inline-flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft text-sm font-semibold text-accent",
         className,
       )}
     >
-      {initial}
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" referrerPolicy="no-referrer" className="size-full object-cover" draggable={false} />
+      ) : (
+        initial
+      )}
     </span>
   );
 }

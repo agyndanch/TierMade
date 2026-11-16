@@ -171,7 +171,7 @@ export function OwnerActions({
                         onClick={() => toggleShare(f)}
                         className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-sm hover:bg-surface-2 disabled:hover:bg-transparent"
                       >
-                        <Avatar name={f.name || f.username} className="size-7 text-xs" />
+                        <Avatar name={f.name || f.username} src={f.image} className="size-7 text-xs" />
                         <span className="min-w-0 flex-1 truncate">@{f.username}</span>
                         {on && <Check className="size-4 text-success" aria-label="Can see this list" />}
                       </button>

@@ -1,4 +1,4 @@
-import { and, asc, ilike, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, ne } from "drizzle-orm";
 import { db, type DB } from "@/db";
 import { user } from "@/db/schema";
 
@@ -34,6 +34,28 @@ export async function findUserByUsername(username: string, d: DB = db): Promise<
     .where(inArray(user.username, [username.toLowerCase()]))
     .limit(1);
   return rows[0] ? toPublic(rows[0]) : null;
+}
+
+export type ProfileUser = PublicUser & { bio: string | null; createdAt: Date };
+
+export async function findProfileByUsername(username: string, d: DB = db): Promise<ProfileUser | null> {
+  const rows = await d
+    .select({ ...publicCols, bio: user.bio, createdAt: user.createdAt })
+    .from(user)
+    .where(eq(user.username, username.toLowerCase()))
+    .limit(1);
+  return rows[0] ? { ...toPublic(rows[0]), bio: rows[0].bio, createdAt: rows[0].createdAt } : null;
+}
+
+export async function updateProfile(
+  id: string,
+  patch: { name?: string; bio?: string | null; image?: string | null },
+  d: DB = db,
+): Promise<void> {
+  await d
+    .update(user)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(user.id, id));
 }
 
 export async function searchUsersByUsername(

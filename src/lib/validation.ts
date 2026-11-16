@@ -42,6 +42,27 @@ export const customEntrySchema = z.object({
   tierId: z.preprocess(blankToUndefined, z.uuid().optional()),
 });
 
+export const BIO_MAX = 160;
+
+export const profileSchema = z.object({
+  name: z.string().trim().min(1, "Enter a display name").max(50, "Display names can be up to 50 characters"),
+  bio: z.preprocess(
+    blankToUndefined,
+    z.string().trim().max(BIO_MAX, `Bios can be up to ${BIO_MAX} characters`).optional(),
+  ),
+});
+
+/** Query-string filters for the browse page and profile Lists tab. Bad values are ignored. */
+export const listFiltersSchema = z.object({
+  q: z.preprocess(blankToUndefined, z.string().trim().max(100).optional()).catch(undefined),
+  category: z.preprocess(blankToUndefined, categorySchema.optional()).catch(undefined),
+  format: z.preprocess(blankToUndefined, z.enum(["ranked", "tier"]).optional()).catch(undefined),
+  sort: z.enum(["recent", "title"]).catch("recent"),
+  friend: z.preprocess(blankToUndefined, z.string().max(64).optional()).catch(undefined),
+  page: z.coerce.number().int().min(1).max(100).catch(1),
+});
+export type ListFiltersQuery = z.infer<typeof listFiltersSchema>;
+
 export const reorderSchema = z.object({
   entries: z
     .array(

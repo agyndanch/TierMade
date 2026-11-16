@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db, type DB } from "@/db";
 import { friendships, items, listEntries, lists, listShares, listTiers, user, type List } from "@/db/schema";
 
@@ -125,40 +125,97 @@ export async function listsByOwnerAndCategory(ownerId: string, category: string,
 }
 
 /**
- * Lists other people have made visible to `userId`: shared directly, or
- * visibility = 'friends' where the owner is an accepted friend.
+ * SQL condition: someone else's list that `viewerId` may see, because it was
+ * shared with them directly or it's visibility = 'friends' and the owner is an
+ * accepted friend. Mirrors canViewList in services/access.ts.
  */
-export async function listsVisibleToUser(userId: string, d: DB = db): Promise<ListSummary[]> {
+function visibleToOthers(viewerId: string, d: DB) {
   const directlyShared = d
     .select({ id: listShares.listId })
     .from(listShares)
-    .where(eq(listShares.userId, userId));
+    .where(eq(listShares.userId, viewerId));
 
   const friendIds = d
     .select({
-      id: sql<string>`case when ${friendships.requesterId} = ${userId} then ${friendships.addresseeId} else ${friendships.requesterId} end`,
+      id: sql<string>`case when ${friendships.requesterId} = ${viewerId} then ${friendships.addresseeId} else ${friendships.requesterId} end`,
     })
     .from(friendships)
     .where(
       and(
         eq(friendships.status, "accepted"),
-        or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId)),
+        or(eq(friendships.requesterId, viewerId), eq(friendships.addresseeId, viewerId)),
       ),
     );
 
+  return and(
+    sql`${lists.ownerId} <> ${viewerId}`,
+    or(inArray(lists.id, directlyShared), and(eq(lists.visibility, "friends"), inArray(lists.ownerId, friendIds))),
+  );
+}
+
+/** Lists other people have made visible to `userId`, most recently updated first. */
+export async function listsVisibleToUser(userId: string, d: DB = db): Promise<ListSummary[]> {
   const rows = await d
     .select(summaryCols)
     .from(lists)
     .innerJoin(user, eq(user.id, lists.ownerId))
-    .where(
-      and(
-        sql`${lists.ownerId} <> ${userId}`,
-        or(
-          inArray(lists.id, directlyShared),
-          and(eq(lists.visibility, "friends"), inArray(lists.ownerId, friendIds)),
-        ),
-      ),
-    )
+    .where(visibleToOthers(userId, d))
     .orderBy(desc(lists.updatedAt));
   return attachCovers(rows, d);
+}
+
+export type ListFilters = {
+  /** one person's lists (yours: all of them; anyone else's: only those you may see) */
+  ownerId?: string;
+  category?: string;
+  format?: "ranked" | "tier";
+  /** title contains, case-insensitive */
+  q?: string;
+  sort?: "recent" | "title";
+  limit?: number;
+  offset?: number;
+};
+
+function filterConditions(viewerId: string, f: ListFilters, d: DB) {
+  const conds = [];
+  if (f.ownerId && f.ownerId === viewerId) {
+    conds.push(eq(lists.ownerId, viewerId));
+  } else {
+    conds.push(visibleToOthers(viewerId, d));
+    if (f.ownerId) conds.push(eq(lists.ownerId, f.ownerId));
+  }
+  if (f.category) conds.push(eq(lists.category, f.category));
+  if (f.format) conds.push(eq(lists.format, f.format));
+  if (f.q) conds.push(ilike(lists.title, `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`));
+  return and(...conds);
+}
+
+/** Filtered, paged lists the viewer may see (see ListFilters). */
+export async function searchLists(
+  viewerId: string,
+  f: ListFilters = {},
+  d: DB = db,
+): Promise<{ lists: ListSummary[]; hasMore: boolean }> {
+  const limit = f.limit ?? 24;
+  const rows = await d
+    .select(summaryCols)
+    .from(lists)
+    .innerJoin(user, eq(user.id, lists.ownerId))
+    .where(filterConditions(viewerId, f, d))
+    .orderBy(
+      ...(f.sort === "title" ? [asc(sql`lower(${lists.title})`)] : [desc(lists.updatedAt)]),
+      asc(lists.id),
+    )
+    .limit(limit + 1)
+    .offset(f.offset ?? 0);
+  return { lists: await attachCovers(rows.slice(0, limit), d), hasMore: rows.length > limit };
+}
+
+/** How many lists by `ownerId` the viewer may see (all of them for your own). */
+export async function countVisibleLists(viewerId: string, ownerId: string, d: DB = db): Promise<number> {
+  const [row] = await d
+    .select({ n: sql<number>`count(*)::int` })
+    .from(lists)
+    .where(filterConditions(viewerId, { ownerId }, d));
+  return Number(row?.n ?? 0);
 }

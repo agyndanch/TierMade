@@ -6,11 +6,13 @@ import { runMigrations } from "@/db/migrate";
 import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
 import { MAX_IMAGE_BYTES, imageIdFromUrl } from "@/lib/images";
-import { customEntrySchema, reorderSchema, updateListSchema } from "@/lib/validation";
+import { customEntrySchema, profileSchema, reorderSchema, updateListSchema } from "@/lib/validation";
 import { findImage } from "@/repositories/images";
-import { listsVisibleToUser, listsByOwner } from "@/repositories/lists";
+import { listsVisibleToUser, listsByOwner, searchLists } from "@/repositories/lists";
+import { findProfileByUsername } from "@/repositories/users";
 import * as lists from "@/services/lists";
 import * as friends from "@/services/friends";
+import * as profiles from "@/services/profiles";
 import { compareListsForViewer } from "@/services/compare";
 
 const catalog: Record<string, CatalogResult> = Object.fromEntries(
@@ -278,6 +280,93 @@ describe("custom items", () => {
     expect(await findImage(imageIdFromUrl(b.item.imageUrl)!)).toBeNull();
     // catalog items are a shared cache and stay
     expect(await itemExists(catalogEntry.item.id)).toBe(true);
+  });
+});
+
+describe("profiles and finding lists", () => {
+  // pat ↔ quinn, pat ↔ tom, quinn ↔ tom, quinn ↔ rae are friends; pat → sam is pending; uma is a stranger.
+  let pat: string, quinn: string, rae: string, sam: string, tom: string, uma: string;
+  const befriend = async (a: string, aName: string, bName: string, bId: string) => {
+    await friends.sendFriendRequest(a, bName);
+    const { incoming } = await friends.getFriendsOverview(bId);
+    await friends.respondToRequest(incoming.find((r) => r.username === aName)!.requestId, bId, true);
+  };
+  const titles = (ls: { title: string }[]) => ls.map((l) => l.title);
+
+  beforeAll(async () => {
+    [pat, quinn, rae, sam, tom, uma] = await Promise.all(["pat", "quinn", "rae", "sam", "tom", "uma"].map(makeUser));
+    await befriend(pat, "pat", "quinn", quinn);
+    await befriend(pat, "pat", "tom", tom);
+    await befriend(quinn, "quinn", "tom", tom);
+    await befriend(quinn, "quinn", "rae", rae);
+    await friends.sendFriendRequest(pat, "sam");
+    await lists.createList(quinn, { title: "Quinn's films", category: "films", format: "ranked", visibility: "friends" });
+    await lists.createList(quinn, { title: "Albums tiers", category: "albums", format: "tier", visibility: "friends" });
+    await lists.createList(quinn, { title: "Secret 100%", category: "films", format: "ranked", visibility: "private" });
+  });
+
+  it("reports how the viewer knows someone, and what they can see", async () => {
+    expect(await profiles.getProfile("quinn", pat)).toMatchObject({ relationship: "friends", stats: { lists: 2, friends: 3 } });
+    expect(await profiles.getProfile("quinn", quinn)).toMatchObject({ relationship: "self", stats: { lists: 3 } });
+    expect(await profiles.getProfile("QUINN", uma)).toMatchObject({ relationship: "none", stats: { lists: 0 } });
+    expect(await profiles.getProfile("sam", pat)).toMatchObject({ relationship: "request-sent", requestId: null });
+    const received = await profiles.getProfile("pat", sam);
+    expect(received.relationship).toBe("request-received");
+    expect(received.requestId).toEqual(expect.any(String));
+    await expectStatus(profiles.getProfile("nobody", pat), 404);
+  });
+
+  it("searches only lists the viewer may see, with filters, sorting and paging", async () => {
+    expect(titles((await searchLists(pat, { ownerId: quinn })).lists).sort()).toEqual(["Albums tiers", "Quinn's films"]);
+    expect(titles((await searchLists(pat, { ownerId: quinn, category: "films" })).lists)).toEqual(["Quinn's films"]);
+    expect(titles((await searchLists(pat, { ownerId: quinn, format: "tier" })).lists)).toEqual(["Albums tiers"]);
+    expect(titles((await searchLists(pat, { ownerId: quinn, q: "ALBUM" })).lists)).toEqual(["Albums tiers"]);
+    expect(titles((await searchLists(pat, { ownerId: quinn, q: "%" })).lists)).toEqual([]); // wildcards are literal
+    expect(titles((await searchLists(pat, { ownerId: quinn, sort: "title" })).lists)).toEqual(["Albums tiers", "Quinn's films"]);
+    const page1 = await searchLists(pat, { ownerId: quinn, sort: "title", limit: 1 });
+    expect(page1).toMatchObject({ hasMore: true });
+    expect(titles(page1.lists)).toEqual(["Albums tiers"]);
+
+    // never the private one, not for strangers, and all of your own
+    expect(titles((await searchLists(pat, {})).lists)).not.toContain("Secret 100%");
+    expect((await searchLists(uma, { ownerId: quinn })).lists).toEqual([]);
+    expect((await searchLists(quinn, { ownerId: quinn })).lists).toHaveLength(3);
+  });
+
+  it("shows a profile's friends to them and their friends only, mutual first", async () => {
+    expect(await profiles.getProfileFriends(quinn, uma)).toBeNull();
+    const seenByPat = await profiles.getProfileFriends(quinn, pat);
+    expect(seenByPat!.map((f) => [f.username, f.mutual])).toEqual([
+      ["tom", true],
+      ["pat", false],
+      ["rae", false],
+    ]);
+    expect((await profiles.getProfileFriends(quinn, quinn))!.map((f) => f.username)).toEqual(["pat", "rae", "tom"]);
+  });
+
+  it("updates name, bio and avatar, cleaning up replaced photos", async () => {
+    expect(() => profileSchema.parse({ name: "  " })).toThrow();
+    expect(() => profileSchema.parse({ name: "Ok", bio: "x".repeat(161) })).toThrow();
+    expect(profileSchema.parse({ name: " Pat ", bio: "  " })).toEqual({ name: "Pat" });
+
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7]);
+    await profiles.updateMyProfile(pat, { name: "Pat P", bio: "Loves synth-pop", avatar: png });
+    const first = await findProfileByUsername("pat");
+    expect(first).toMatchObject({ name: "Pat P", bio: "Loves synth-pop" });
+    const firstImage = imageIdFromUrl(first!.image)!;
+    expect(await findImage(firstImage)).not.toBeNull();
+
+    await profiles.updateMyProfile(pat, { name: "Pat P", bio: null, avatar: png });
+    const second = await findProfileByUsername("pat");
+    expect(second!.bio).toBeNull();
+    expect(await findImage(firstImage)).toBeNull(); // old photo deleted
+    const secondImage = imageIdFromUrl(second!.image)!;
+
+    await profiles.updateMyProfile(pat, { name: "Pat P", bio: null, removeAvatar: true });
+    expect((await findProfileByUsername("pat"))!.image).toBeNull();
+    expect(await findImage(secondImage)).toBeNull();
+
+    await expectStatus(profiles.updateMyProfile(pat, { name: "Pat", bio: null, avatar: Buffer.from("<svg/>") }), 400);
   });
 });
 
