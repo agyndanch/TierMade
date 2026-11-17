@@ -99,6 +99,9 @@ export function SearchPanel({
                 <Cover src={r.imageUrl} alt={r.title} aspect={category.aspect} className={category.aspect === "square" ? "w-11" : "w-9"} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{r.title}</span>
+                  {typeof r.metadata?.altTitle === "string" && (
+                    <span className="block truncate text-xs italic text-muted">{r.metadata.altTitle}</span>
+                  )}
                   <span className="block truncate text-xs text-muted">
                     {[r.subtitle, r.year].filter(Boolean).join(" · ") || " "}
                   </span>

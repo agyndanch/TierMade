@@ -56,6 +56,8 @@ describe("isAllowedCoverUrl", () => {
     expect(isAllowedCoverUrl("https://e-cdns-images.dzcdn.net/images/cover/x.jpg")).toBe(true);
     expect(isAllowedCoverUrl("https://image.tmdb.org/t/p/w342/p.jpg")).toBe(true);
     expect(isAllowedCoverUrl("https://images.igdb.com/igdb/image/upload/t_cover_big/x.jpg")).toBe(true);
+    expect(isAllowedCoverUrl("https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/x.jpg")).toBe(true);
+    expect(isAllowedCoverUrl("https://anilist.co/x.jpg")).toBe(false);
 
     expect(isAllowedCoverUrl("http://image.tmdb.org/t/p/w342/p.jpg")).toBe(false);
     expect(isAllowedCoverUrl("https://dzcdn.net.evil.com/x.jpg")).toBe(false);

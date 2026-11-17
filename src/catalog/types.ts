@@ -1,4 +1,4 @@
-export type CatalogSource = "deezer" | "igdb" | "tmdb";
+export type CatalogSource = "deezer" | "igdb" | "tmdb" | "anilist";
 
 /** The normalized shape every adapter returns. */
 export type CatalogResult = {

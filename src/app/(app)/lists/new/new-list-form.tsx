@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { Clapperboard, Disc3, Gamepad2, ListOrdered, Music, Rows3, Tv } from "lucide-react";
+import { BookOpen, Clapperboard, Disc3, Gamepad2, ListOrdered, Music, Rows3, Sparkles, Tv } from "lucide-react";
 import { CATEGORIES, CATEGORY_IDS, type CategoryId } from "@/catalog/categories";
 import { Button, Input, Label } from "@/components/ui";
 import { api, cn } from "@/lib/utils";
@@ -13,6 +13,8 @@ const ICONS: Record<CategoryId, typeof Disc3> = {
   games: Gamepad2,
   films: Clapperboard,
   tv: Tv,
+  anime: Sparkles,
+  manga: BookOpen,
 };
 
 export function NewListForm({ initialCategory }: { initialCategory?: CategoryId }) {
@@ -44,7 +46,7 @@ export function NewListForm({ initialCategory }: { initialCategory?: CategoryId 
     <form onSubmit={onSubmit} className="space-y-7">
       <fieldset>
         <legend className="mb-2 text-sm font-medium">Category</legend>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {CATEGORY_IDS.map((id) => {
             const Icon = ICONS[id];
             const selected = id === category;

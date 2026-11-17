@@ -6,7 +6,7 @@ import { runMigrations } from "@/db/migrate";
 import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
 import { MAX_IMAGE_BYTES, imageIdFromUrl } from "@/lib/images";
-import { customEntrySchema, profileSchema, reorderSchema, updateListSchema } from "@/lib/validation";
+import { createListSchema, customEntrySchema, profileSchema, reorderSchema, updateListSchema } from "@/lib/validation";
 import { findImage } from "@/repositories/images";
 import { listsVisibleToUser, listsByOwner, searchLists } from "@/repositories/lists";
 import { findProfileByUsername } from "@/repositories/users";
@@ -148,6 +148,17 @@ describe("lists", () => {
     expect(() => updateListSchema.parse({ showTitles: "yes" })).toThrow();
     expect(() => updateListSchema.parse({ showCreators: 1 })).toThrow();
     await expectStatus(lists.updateList(list.id, bob, { view: "list" }), 404);
+  });
+
+  it("accepts the anime and manga categories", async () => {
+    for (const category of ["anime", "manga"] as const) {
+      const input = createListSchema.parse({ title: `My ${category}`, category, format: "ranked" });
+      const list = await lists.createList(alice, input);
+      const entry = await lists.addItemToList(list.id, alice, "heat", null, adapterFor);
+      expect(entry.item.title).toBe("Heat");
+      expect((await lists.getListDetail(list.id, alice)).list.category).toBe(category);
+    }
+    expect(() => createListSchema.parse({ title: "x", category: "podcasts", format: "ranked" })).toThrow();
   });
 
   it("only lets the owner edit", async () => {

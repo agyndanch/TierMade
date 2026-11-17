@@ -2,7 +2,7 @@
 
 Rank anything, then compare your taste with your friends'.
 
-TierMade lets you build **ranked lists** and **tier lists** of albums, songs, video games, films and TV shows. You add items by searching a real database inside the app, with no typing titles or hunting for cover art. Then you compare any two lists in the same category side by side and get a taste-match score.
+TierMade lets you build **ranked lists** and **tier lists** of albums, songs, video games, films, TV shows, anime and manga. You add items by searching a real database inside the app, with no typing titles or hunting for cover art. Then you compare any two lists in the same category side by side and get a taste-match score.
 
 ## Stack
 
@@ -10,7 +10,7 @@ TierMade lets you build **ranked lists** and **tier lists** of albums, songs, vi
 - **PostgreSQL** via Drizzle ORM. Locally it can run on embedded **PGlite**, so Docker isn't required.
 - **Better Auth** (email + password, usernames)
 - **dnd-kit** for drag and drop. **TanStack Query** for search.
-- External data: **Deezer** (music, no key), **IGDB** (games), **TMDB** (films + TV)
+- External data: **Deezer** (music, no key), **IGDB** (games), **TMDB** (films + TV), **AniList** (anime + manga, no key)
 
 ## Getting started
 
@@ -28,6 +28,7 @@ npm run dev                    # http://localhost:3000
 | Albums, Songs | none | Deezer public API |
 | Films, TV shows | `TMDB_API_TOKEN` | themoviedb.org → Settings → API → *API Read Access Token* |
 | Video games | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | dev.twitch.tv/console/apps → register an app (IGDB uses Twitch auth) |
+| Anime, Manga | none | AniList public GraphQL API (adult titles are filtered out) |
 
 If a key is missing, only that category's search fails, with a clear message. Everything else works.
 
@@ -69,7 +70,7 @@ src/
   components/     UI (list editor, tier board, search panel…)
 ```
 
-- **Adding a category** means writing or reusing an adapter in `src/catalog/adapters/`, registering it in `src/catalog/registry.ts`, and adding its metadata in `src/catalog/categories.ts`. TV shows were added this way, reusing the TMDB adapter.
+- **Adding a category** means writing or reusing an adapter in `src/catalog/adapters/`, registering it in `src/catalog/registry.ts`, and adding its metadata in `src/catalog/categories.ts`. TV shows were added this way, reusing the TMDB adapter; anime and manga share one AniList adapter.
 - **Items are shared.** Every list entry points at one canonical `items` row per (source, category, external id), so comparing two lists is a join on item id.
 - **Access rules:** the owner can always see a list. Anyone else needs either a direct share (friends only) or `visibility = friends` plus an accepted friendship. Only the owner can edit. Unfriending revokes direct shares.
 - **Taste match** is `30% × overlap (Jaccard) + 70% × agreement on shared items`. Agreement is a normalized Spearman footrule for ranked vs ranked, and mean tier distance for tier lists. Ranked lists get bucketed into tiers when compared with a tier list.

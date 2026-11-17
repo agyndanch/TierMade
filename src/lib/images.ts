@@ -21,7 +21,7 @@ export function sniffImageType(buf: Uint8Array): ImageType | null {
 }
 
 /**
- * Catalog cover hosts the cover proxy may fetch from (Deezer, TMDB, IGDB).
+ * Catalog cover hosts the cover proxy may fetch from (Deezer, TMDB, IGDB, AniList).
  * https only, default port, exact host or a subdomain of dzcdn.net.
  */
 export function isAllowedCoverUrl(raw: string): boolean {
@@ -33,7 +33,13 @@ export function isAllowedCoverUrl(raw: string): boolean {
   }
   if (u.protocol !== "https:" || u.port || u.username || u.password) return false;
   const h = u.hostname.toLowerCase();
-  return h === "image.tmdb.org" || h === "images.igdb.com" || h === "dzcdn.net" || h.endsWith(".dzcdn.net");
+  return (
+    h === "image.tmdb.org" ||
+    h === "images.igdb.com" ||
+    h === "s4.anilist.co" ||
+    h === "dzcdn.net" ||
+    h.endsWith(".dzcdn.net")
+  );
 }
 
 /** Path the app serves an uploaded image from. */

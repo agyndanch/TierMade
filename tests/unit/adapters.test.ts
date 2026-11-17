@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDeezerAlbumAdapter, createDeezerTrackAdapter } from "@/catalog/adapters/deezer";
 import { createTmdbMovieAdapter, createTmdbTvAdapter } from "@/catalog/adapters/tmdb";
 import { createIgdbAdapter } from "@/catalog/adapters/igdb";
+import { createAniListAnimeAdapter, createAniListMangaAdapter } from "@/catalog/adapters/anilist";
 import { withCache } from "@/catalog/cache";
-import { CatalogConfigError } from "@/catalog/types";
+import { CatalogConfigError, CatalogError } from "@/catalog/types";
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -170,6 +171,98 @@ describe("IGDB adapter", () => {
     await createIgdbAdapter(fetchMock as unknown as typeof fetch, 0).search('zelda"; fields *;');
     const [, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
     expect(init.body).toMatch(/^search "zelda ; fields \*;";/);
+  });
+});
+
+describe("AniList adapters", () => {
+  const titan = {
+    id: 16498,
+    isAdult: false,
+    title: { english: "Attack on Titan", romaji: "Shingeki no Kyojin", native: "進撃の巨人" },
+    coverImage: { extraLarge: "https://s4.anilist.co/file/xl.jpg", large: "https://s4.anilist.co/file/l.jpg" },
+    startDate: { year: 2013 },
+    format: "TV",
+    episodes: 25,
+    studios: { nodes: [{ name: "Pony Canyon", isAnimationStudio: false }, { name: "Wit Studio", isAnimationStudio: true }] },
+    staff: { edges: [] },
+  };
+  const berserk = {
+    id: 30002,
+    isAdult: false,
+    title: { english: null, romaji: "Berserk", native: "ベルセルク" },
+    coverImage: { extraLarge: null, large: "https://s4.anilist.co/file/b.jpg" },
+    startDate: { year: 1989 },
+    format: "MANGA",
+    chapters: null,
+    studios: { nodes: [] },
+    staff: {
+      edges: [
+        { role: "Assistant", node: { name: { full: "Someone Else" } } },
+        { role: "Story & Art", node: { name: { full: "Kentarou Miura" } } },
+      ],
+    },
+  };
+
+  it("searches anime with a variables-only GraphQL POST and maps English titles + studio", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { Page: { media: [titan] } } }));
+    const [result] = await createAniListAnimeAdapter(fetchMock as unknown as typeof fetch).search('titan"){}', 10);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://graphql.anilist.co");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(String(init.body));
+    expect(body.variables).toEqual({ search: 'titan"){}', type: "ANIME", perPage: 10 });
+    expect(body.query).toContain("isAdult: false");
+    expect(body.query).not.toContain("titan"); // user input never goes into the query text
+
+    expect(result).toEqual({
+      externalId: "16498",
+      title: "Attack on Titan",
+      subtitle: "Wit Studio",
+      year: 2013,
+      imageUrl: "https://s4.anilist.co/file/xl.jpg",
+      metadata: { altTitle: "Shingeki no Kyojin", native: "進撃の巨人", format: "TV", episodes: 25 },
+    });
+  });
+
+  it("falls back to romaji, uses the story author for manga, and the large cover", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { Media: berserk } }));
+    const item = await createAniListMangaAdapter(fetchMock as unknown as typeof fetch).getItem("30002");
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).variables).toEqual({
+      id: 30002,
+      type: "MANGA",
+    });
+    expect(item).toMatchObject({
+      title: "Berserk",
+      subtitle: "Kentarou Miura",
+      year: 1989,
+      imageUrl: "https://s4.anilist.co/file/b.jpg",
+    });
+    expect(item!.metadata!.altTitle).toBeUndefined(); // romaji is already the title
+  });
+
+  it("skips a romaji line that only differs in case or punctuation", async () => {
+    const proto = { ...berserk, title: { english: "Berserk: The Prototype", romaji: "BERSERK THE PROTOTYPE", native: null } };
+    const fetchMock = vi.fn(async () => jsonResponse({ data: { Media: proto } }));
+    const item = await createAniListMangaAdapter(fetchMock as unknown as typeof fetch).getItem("1");
+    expect(item!.metadata!.altTitle).toBeUndefined();
+  });
+
+  it("returns null for bad ids, missing or adult items, and maps 429 to a 503", async () => {
+    const never = vi.fn();
+    expect(await createAniListMangaAdapter(never as unknown as typeof fetch).getItem("../x")).toBeNull();
+    expect(never).not.toHaveBeenCalled();
+
+    const missing = vi.fn(async () => jsonResponse({ data: { Media: null }, errors: [{ status: 404, message: "Not Found." }] }, 404));
+    expect(await createAniListAnimeAdapter(missing as unknown as typeof fetch).getItem("999999999")).toBeNull();
+
+    const adult = vi.fn(async () => jsonResponse({ data: { Media: { ...titan, isAdult: true } } }));
+    expect(await createAniListAnimeAdapter(adult as unknown as typeof fetch).getItem("1")).toBeNull();
+
+    const busy = vi.fn(async () => jsonResponse({}, 429));
+    const err = await createAniListAnimeAdapter(busy as unknown as typeof fetch).search("x").catch((e) => e);
+    expect(err).toBeInstanceOf(CatalogError);
+    expect((err as CatalogError).status).toBe(503);
   });
 });
 

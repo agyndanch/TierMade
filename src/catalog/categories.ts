@@ -1,6 +1,6 @@
 // Client-safe category metadata. Server-only adapters live in ./registry.ts.
 
-export const CATEGORY_IDS = ["albums", "songs", "games", "films", "tv"] as const;
+export const CATEGORY_IDS = ["albums", "songs", "games", "films", "tv", "anime", "manga"] as const;
 export type CategoryId = (typeof CATEGORY_IDS)[number];
 
 export type CategoryInfo = {
@@ -10,7 +10,7 @@ export type CategoryInfo = {
   noun: string;
   /** cover aspect ratio for cards */
   aspect: "square" | "portrait";
-  source: "deezer" | "igdb" | "tmdb";
+  source: "deezer" | "igdb" | "tmdb" | "anilist";
   placeholder: string;
   /** label for the creator field when adding a custom item */
   creatorLabel: string;
@@ -61,6 +61,24 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     source: "tmdb",
     placeholder: "e.g. The Bear, Breaking Bad",
     creatorLabel: "Creator",
+  },
+  anime: {
+    id: "anime",
+    label: "Anime",
+    noun: "anime",
+    aspect: "portrait",
+    source: "anilist",
+    placeholder: "e.g. Frieren, Cowboy Bebop",
+    creatorLabel: "Studio",
+  },
+  manga: {
+    id: "manga",
+    label: "Manga",
+    noun: "manga",
+    aspect: "portrait",
+    source: "anilist",
+    placeholder: "e.g. Berserk, Vagabond",
+    creatorLabel: "Author",
   },
 };
 

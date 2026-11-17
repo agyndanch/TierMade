@@ -45,8 +45,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-xs text-muted sm:px-6">
-        Music data from Deezer · Game data from IGDB · Film &amp; TV data from TMDB. This product uses the TMDB API but
-        is not endorsed or certified by TMDB.
+        Music data from Deezer · Game data from IGDB · Film &amp; TV data from TMDB · Anime &amp; manga data from AniList.
+        This product uses the TMDB API but is not endorsed or certified by TMDB.
       </footer>
     </>
   );

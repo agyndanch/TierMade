@@ -5,6 +5,7 @@ import { withCache } from "./cache";
 import { createDeezerAlbumAdapter, createDeezerTrackAdapter } from "./adapters/deezer";
 import { createTmdbMovieAdapter, createTmdbTvAdapter } from "./adapters/tmdb";
 import { createIgdbAdapter } from "./adapters/igdb";
+import { createAniListAnimeAdapter, createAniListMangaAdapter } from "./adapters/anilist";
 
 /**
  * Category → adapter. Adding a category = add an entry here (plus its
@@ -16,6 +17,8 @@ const ADAPTERS: Record<CategoryId, CatalogAdapter> = {
   games: withCache(createIgdbAdapter(), "games"),
   films: withCache(createTmdbMovieAdapter(), "films"),
   tv: withCache(createTmdbTvAdapter(), "tv"),
+  anime: withCache(createAniListAnimeAdapter(), "anime"),
+  manga: withCache(createAniListMangaAdapter(), "manga"),
 };
 
 export function getAdapter(category: CategoryId): CatalogAdapter {
