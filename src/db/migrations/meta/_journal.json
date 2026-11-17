@@ -43,6 +43,13 @@
       "when": 1794874363524,
       "tag": "0005_grid_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794881074258,
+      "tag": "0006_entry_labels",
+      "breakpoints": true
     }
   ]
 }

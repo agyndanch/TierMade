@@ -8,11 +8,18 @@ export type EntryWithItem = {
   position: number;
   /** ranked lists: in the "Not ranked yet" pool */
   unranked: boolean;
+  /** the owner's own names for this item in this list (null = the catalog's) */
+  customTitle: string | null;
+  customSubtitle: string | null;
   item: {
     id: string;
     externalId: string;
+    /** what this list shows: the custom name if there is one, else the catalog's */
     title: string;
     subtitle: string | null;
+    /** the catalog's names */
+    originalTitle: string;
+    originalSubtitle: string | null;
     year: number | null;
     imageUrl: string | null;
   };
@@ -30,11 +37,15 @@ export async function entriesForList(listId: string, d: DB = db): Promise<EntryW
       tierId: listEntries.tierId,
       position: listEntries.position,
       unranked: listEntries.unranked,
+      customTitle: listEntries.displayTitle,
+      customSubtitle: listEntries.displaySubtitle,
       item: {
         id: items.id,
         externalId: items.externalId,
-        title: items.title,
-        subtitle: items.subtitle,
+        title: sql<string>`coalesce(${listEntries.displayTitle}, ${items.title})`,
+        subtitle: sql<string | null>`coalesce(${listEntries.displaySubtitle}, ${items.subtitle})`,
+        originalTitle: items.title,
+        originalSubtitle: items.subtitle,
         year: items.year,
         imageUrl: items.imageUrl,
       },
@@ -90,6 +101,21 @@ export async function insertEntry(listId: string, itemId: string, at: Placement,
     .values({ listId, itemId, ...at })
     .returning();
   return row;
+}
+
+/** Sets (or clears, with null) this list's own names for an entry. Returns false if no such entry. */
+export async function updateEntryLabels(
+  listId: string,
+  entryId: string,
+  labels: { displayTitle: string | null; displaySubtitle: string | null },
+  d: DB = db,
+): Promise<boolean> {
+  const rows = await d
+    .update(listEntries)
+    .set(labels)
+    .where(and(eq(listEntries.listId, listId), eq(listEntries.id, entryId)))
+    .returning({ id: listEntries.id });
+  return rows.length > 0;
 }
 
 export async function deleteEntry(listId: string, entryId: string, d: DB = db) {

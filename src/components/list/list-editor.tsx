@@ -11,7 +11,9 @@ import type { ListDisplay } from "@/lib/list-display";
 import * as slots from "@/lib/ranked-slots";
 import { SlidersHorizontal } from "lucide-react";
 import { api, cn } from "@/lib/utils";
+import { applyLabels, type EntryLabels } from "@/lib/entry-labels";
 import { CustomizePanel, ViewBar } from "./display-controls";
+import { ItemEditDialog } from "./item-edit-dialog";
 import { SaveImageButton } from "./save-image-button";
 import { TierBoard, UNSORTED, toContainers, toOrderPayload, type Containers } from "./editor-board";
 import { RankedEditor } from "./ranked-editor";
@@ -49,6 +51,7 @@ export function ListEditor({
   const [display, setDisplay] = useState(initialDisplay);
   const savedDisplay = useRef(initialDisplay);
   const [panel, setPanel] = useState<"add" | "customize">("add");
+  const [editing, setEditing] = useState<EntryWithItem | null>(null);
 
   // Save display changes after the clicking stops, sending only what changed.
   useEffect(() => {
@@ -141,6 +144,24 @@ export function ListEditor({
     }
   }
 
+  /** Save this list's own names for an entry; shows the change at once and undoes it on error. */
+  async function saveLabels(entry: EntryWithItem, labels: EntryLabels): Promise<boolean> {
+    const prevRanked = ranked;
+    const prevContainers = containers;
+    const update = (e: EntryWithItem) => (e.id === entry.id ? applyLabels(e, labels) : e);
+    setRanked((r) => ({ slots: r.slots.map((s) => s && update(s)), pool: r.pool.map(update) }));
+    setContainers((c) => Object.fromEntries(Object.entries(c).map(([k, v]) => [k, v.map(update)])));
+    try {
+      await api(`/api/lists/${listId}/entries/${entry.id}`, { method: "PATCH", json: labels });
+      return true;
+    } catch (e) {
+      setRanked(prevRanked);
+      setContainers(prevContainers);
+      toast.error(e instanceof Error ? e.message : "Couldn't rename that");
+      return false;
+    }
+  }
+
   function changeRanked(next: RankedState) {
     setRanked(next);
     void persist(slots.toOrderPayload(next));
@@ -193,6 +214,7 @@ export function ListEditor({
               aspect={category.aspect}
               onChange={changeRanked}
               onRemove={removeEntry}
+              onEdit={setEditing}
             />
           )
         ) : (
@@ -203,14 +225,24 @@ export function ListEditor({
             onChange={setContainers}
             onCommit={(next) => void persist(toOrderPayload(next))}
             onRemove={removeEntry}
+            onEdit={setEditing}
           />
         )}
         {allEntries.length > 0 && (
           <p className="mt-3 text-xs text-muted">
             {format === "ranked"
-              ? "Drag onto any slot (gaps are fine) or click a rank number to type one. Keyboard: focus an item, press Space, use the arrow keys, then press Space again."
-              : "Drag to reorder. Keyboard: focus a cover, press Space, use the arrow keys, then press Space again."}
+              ? "Drag onto any slot (gaps are fine) or click a rank number to type one. Click an item to rename it in this list. Keyboard: focus an item, press Space, use the arrow keys, then press Space again."
+              : "Drag to reorder. Click a cover to rename it in this list. Keyboard: focus a cover, press Space, use the arrow keys, then press Space again."}
           </p>
+        )}
+        {editing && (
+          <ItemEditDialog
+            key={editing.id}
+            entry={editing}
+            category={category}
+            onSave={(labels) => saveLabels(editing, labels)}
+            onClose={() => setEditing(null)}
+          />
         )}
       </section>
       <aside className="order-1 lg:order-2">

@@ -6,7 +6,14 @@ import { runMigrations } from "@/db/migrate";
 import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
 import { MAX_IMAGE_BYTES, imageIdFromUrl } from "@/lib/images";
-import { createListSchema, customEntrySchema, profileSchema, reorderSchema, updateListSchema } from "@/lib/validation";
+import {
+  createListSchema,
+  customEntrySchema,
+  entryLabelsSchema,
+  profileSchema,
+  reorderSchema,
+  updateListSchema,
+} from "@/lib/validation";
 import { findImage } from "@/repositories/images";
 import { listsVisibleToUser, listsByOwner, searchLists } from "@/repositories/lists";
 import { findProfileByUsername } from "@/repositories/users";
@@ -148,6 +155,47 @@ describe("lists", () => {
     expect(() => updateListSchema.parse({ showTitles: "yes" })).toThrow();
     expect(() => updateListSchema.parse({ showCreators: 1 })).toThrow();
     await expectStatus(lists.updateList(list.id, bob, { view: "list" }), 404);
+  });
+
+  it("renames an item in one list only, and resets it", async () => {
+    const mine = await lists.createList(alice, { title: "Renames", category: "films", format: "ranked", visibility: "friends" });
+    const theirs = await lists.createList(bob, { title: "Bob's", category: "films", format: "ranked", visibility: "private" });
+    const e = await lists.addItemToList(mine.id, alice, "inception", null, adapterFor);
+    await lists.addItemToList(theirs.id, bob, "inception", null, adapterFor);
+
+    const renamed = await lists.renameEntry(
+      mine.id,
+      alice,
+      e.id,
+      entryLabelsSchema.parse({ displayTitle: "  Dream heist ", displaySubtitle: "Nolan" }),
+    );
+    expect(renamed).toMatchObject({
+      customTitle: "Dream heist",
+      customSubtitle: "Nolan",
+      item: { title: "Dream heist", subtitle: "Nolan", originalTitle: "Inception", originalSubtitle: null },
+    });
+    const [shown] = (await lists.getListDetail(mine.id, alice)).entries;
+    expect(shown.item).toMatchObject({ title: "Dream heist", originalTitle: "Inception" });
+    // the catalog item and other people's lists are untouched
+    expect((await lists.getListDetail(theirs.id, bob)).entries[0].item.title).toBe("Inception");
+    // still the same item for comparison
+    const other = await lists.createList(alice, { title: "Other", category: "films", format: "ranked", visibility: "private" });
+    await lists.addItemToList(other.id, alice, "inception", null, adapterFor);
+    const view = await compareListsForViewer(mine.id, other.id, alice);
+    expect(view.result.shared).toHaveLength(1);
+    expect(view.a.entries[0].item.title).toBe("Dream heist");
+    expect(view.b.entries[0].item.title).toBe("Inception");
+
+    // blank resets to the catalog's names
+    const reset = await lists.renameEntry(mine.id, alice, e.id, entryLabelsSchema.parse({ displayTitle: "", displaySubtitle: " " }));
+    expect(reset).toMatchObject({ customTitle: null, customSubtitle: null, item: { title: "Inception", subtitle: null } });
+
+    await expectStatus(lists.renameEntry(mine.id, bob, e.id, { displayTitle: "x", displaySubtitle: null }), 404);
+    await expectStatus(
+      lists.renameEntry(mine.id, alice, "00000000-0000-4000-8000-000000000000", { displayTitle: "x", displaySubtitle: null }),
+      404,
+    );
+    expect(() => entryLabelsSchema.parse({ displayTitle: "x".repeat(201), displaySubtitle: null })).toThrow();
   });
 
   it("accepts the anime and manga categories", async () => {

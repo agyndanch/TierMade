@@ -170,6 +170,10 @@ export const listEntries = pgTable(
     position: integer("position").notNull(),
     /** ranked lists only: waiting in the "Not ranked yet" pool */
     unranked: boolean("unranked").notNull().default(false),
+    /** the owner's own name for this item in this list (null = the catalog's) */
+    displayTitle: text("display_title"),
+    /** the owner's own creator line (artist/developer/…) in this list (null = the catalog's) */
+    displaySubtitle: text("display_subtitle"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

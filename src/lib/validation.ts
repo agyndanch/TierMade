@@ -44,6 +44,16 @@ export const customEntrySchema = z.object({
   tierId: z.preprocess(blankToUndefined, z.uuid().optional()),
 });
 
+/** An entry's own names in a list; blank means "use the catalog's". */
+const optionalLabel = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+  z.string().trim().max(200, "Names can be up to 200 characters").nullable(),
+);
+export const entryLabelsSchema = z.object({
+  displayTitle: optionalLabel,
+  displaySubtitle: optionalLabel,
+});
+
 export const BIO_MAX = 160;
 
 export const profileSchema = z.object({

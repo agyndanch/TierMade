@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -61,6 +61,7 @@ export function TierBoard({
   onChange,
   onCommit,
   onRemove,
+  onEdit,
 }: {
   tiers: ListTier[];
   aspect: "square" | "portrait";
@@ -70,9 +71,16 @@ export function TierBoard({
   /** drag finished: persist this order */
   onCommit: (next: Containers) => void;
   onRemove: (entry: EntryWithItem) => void;
+  /** open the item editor (rename in this list) */
+  onEdit: (entry: EntryWithItem) => void;
 }) {
   const dndId = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
+  // A drag can end with a click on the same cover; don't treat that as "edit".
+  const lastDragEnd = useRef(0);
+  const edit = (entry: EntryWithItem) => {
+    if (Date.now() - lastDragEnd.current > 250) onEdit(entry);
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
@@ -114,6 +122,7 @@ export function TierBoard({
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveId(null);
+    lastDragEnd.current = Date.now();
     let next = containers;
     if (over) {
       const from = findContainer(containers, active.id);
@@ -146,16 +155,26 @@ export function TierBoard({
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveId(null)}
+      onDragCancel={() => {
+        setActiveId(null);
+        lastDragEnd.current = Date.now();
+      }}
     >
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         {tiers.map((t) => (
-          <TierRow key={t.id} tier={t} entries={containers[t.id] ?? []} aspect={aspect} onRemove={onRemove} />
+          <TierRow
+            key={t.id}
+            tier={t}
+            entries={containers[t.id] ?? []}
+            aspect={aspect}
+            onRemove={onRemove}
+            onEdit={edit}
+          />
         ))}
       </div>
       <div className="mt-4">
         <p className="mb-2 text-sm font-medium text-muted">Not ranked yet: drag these into a tier</p>
-        <UnsortedZone entries={containers[UNSORTED] ?? []} aspect={aspect} onRemove={onRemove} />
+        <UnsortedZone entries={containers[UNSORTED] ?? []} aspect={aspect} onRemove={onRemove} onEdit={edit} />
       </div>
       <DragOverlay>{activeEntry ? <TierTile entry={activeEntry} aspect={aspect} overlay /> : null}</DragOverlay>
     </DndContext>
@@ -166,6 +185,7 @@ type ZoneProps = {
   entries: EntryWithItem[];
   aspect: "square" | "portrait";
   onRemove: (e: EntryWithItem) => void;
+  onEdit: (e: EntryWithItem) => void;
 };
 
 /** One tier: the whole row, label included, is the drop target. */
@@ -201,12 +221,18 @@ function UnsortedZone(props: ZoneProps) {
 }
 
 /** The sortable covers inside a tier or the unsorted pool (the drop target is the parent). */
-function TileArea({ id, entries, aspect, onRemove, emptyText }: ZoneProps & { id: string; emptyText?: string }) {
+function TileArea({ id, entries, aspect, onRemove, onEdit, emptyText }: ZoneProps & { id: string; emptyText?: string }) {
   return (
     <SortableContext id={id} items={entries.map((e) => e.id)} strategy={rectSortingStrategy}>
       <div className="flex min-h-24 flex-1 flex-wrap content-start gap-2 p-2">
         {entries.map((e) => (
-          <SortableTierTile key={e.id} entry={e} aspect={aspect} onRemove={() => onRemove(e)} />
+          <SortableTierTile
+            key={e.id}
+            entry={e}
+            aspect={aspect}
+            onRemove={() => onRemove(e)}
+            onEdit={() => onEdit(e)}
+          />
         ))}
         {entries.length === 0 && emptyText && <p className="self-center px-2 text-sm text-muted">{emptyText}</p>}
       </div>
@@ -218,10 +244,12 @@ function SortableTierTile({
   entry,
   aspect,
   onRemove,
+  onEdit,
 }: {
   entry: EntryWithItem;
   aspect: "square" | "portrait";
   onRemove: () => void;
+  onEdit: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
   return (
@@ -231,6 +259,7 @@ function SortableTierTile({
       aspect={aspect}
       dragging={isDragging}
       onRemove={onRemove}
+      onEdit={onEdit}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className="touch-none cursor-grab active:cursor-grabbing"
       aria-label={`${entry.item.title}. Press space to pick up, arrow keys to move.`}

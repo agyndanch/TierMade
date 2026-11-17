@@ -90,15 +90,39 @@ function toEntryWithItem(
     tierId: entry.tierId,
     position: entry.position,
     unranked: entry.unranked,
+    customTitle: null,
+    customSubtitle: null,
     item: {
       id: item.id,
       externalId: item.externalId,
       title: item.title,
       subtitle: item.subtitle,
+      originalTitle: item.title,
+      originalSubtitle: item.subtitle,
       year: item.year,
       imageUrl: item.imageUrl,
     },
   };
+}
+
+/**
+ * The owner's own names for an item in this list ("P5R" for "Persona 5 Royal").
+ * Only this list changes; the catalog item and everyone else's lists don't.
+ * Pass null to go back to the catalog's name.
+ */
+export async function renameEntry(
+  listId: string,
+  userId: string,
+  entryId: string,
+  labels: { displayTitle: string | null; displaySubtitle: string | null },
+  d: DB = db,
+): Promise<entriesRepo.EntryWithItem> {
+  await getOwnedList(listId, userId, d);
+  if (!(await entriesRepo.updateEntryLabels(listId, entryId, labels, d))) throw notFound("Entry not found");
+  await listsRepo.touchList(listId, d);
+  const entry = (await entriesRepo.entriesForList(listId, d)).find((e) => e.id === entryId);
+  if (!entry) throw notFound("Entry not found");
+  return entry;
 }
 
 export type CustomItemInput = {

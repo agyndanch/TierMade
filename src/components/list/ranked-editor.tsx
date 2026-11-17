@@ -89,6 +89,7 @@ export function RankedEditor({
   aspect,
   onChange,
   onRemove,
+  onEdit,
 }: {
   state: State;
   display: ListDisplay;
@@ -96,9 +97,16 @@ export function RankedEditor({
   /** a move happened: show it and save it */
   onChange: (next: State) => void;
   onRemove: (entry: EntryWithItem) => void;
+  /** open the item editor (rename in this list) */
+  onEdit: (entry: EntryWithItem) => void;
 }) {
   const dndId = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
+  // A drag can end with a click on the same cover; don't treat that as "edit".
+  const lastDragEnd = useRef(0);
+  const edit = (entry: EntryWithItem) => {
+    if (Date.now() - lastDragEnd.current > 250) onEdit(entry);
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
@@ -117,6 +125,7 @@ export function RankedEditor({
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveId(null);
+    lastDragEnd.current = Date.now();
     if (!over) return;
     const id = String(active.id);
     const slot = parseSlot(over.id);
@@ -141,15 +150,26 @@ export function RankedEditor({
       accessibility={{ announcements }}
       onDragStart={({ active }: DragStartEvent) => setActiveId(String(active.id))}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveId(null)}
+      onDragCancel={() => {
+        setActiveId(null);
+        lastDragEnd.current = Date.now();
+      }}
     >
       {display.view === "grid" ? (
-        <GridSlots state={state} display={display} aspect={aspect} maxRank={maxRank} moveTo={moveTo} onRemove={onRemove} />
+        <GridSlots
+          state={state}
+          display={display}
+          aspect={aspect}
+          maxRank={maxRank}
+          moveTo={moveTo}
+          onRemove={onRemove}
+          onEdit={edit}
+        />
       ) : (
-        <ListSlots state={state} aspect={aspect} maxRank={maxRank} moveTo={moveTo} onRemove={onRemove} />
+        <ListSlots state={state} aspect={aspect} maxRank={maxRank} moveTo={moveTo} onRemove={onRemove} onEdit={edit} />
       )}
 
-      <Pool state={state} aspect={aspect} maxRank={maxRank} moveTo={moveTo} onRemove={onRemove} />
+      <Pool state={state} aspect={aspect} maxRank={maxRank} moveTo={moveTo} onRemove={onRemove} onEdit={edit} />
 
       <DragOverlay>
         {active ? (
@@ -170,6 +190,7 @@ type SlotsProps = {
   maxRank: number;
   moveTo: (entry: EntryWithItem) => (rank: number) => void;
   onRemove: (entry: EntryWithItem) => void;
+  onEdit: (entry: EntryWithItem) => void;
 };
 
 /* --------------------------------- grid --------------------------------- */
@@ -222,6 +243,7 @@ function DraggableTile({
   maxRank,
   moveTo,
   onRemove,
+  onEdit,
   className,
 }: Omit<SlotsProps, "state"> & { entry: EntryWithItem; label: string; className?: string }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: entry.id });
@@ -233,6 +255,7 @@ function DraggableTile({
         aspect={aspect}
         dragging={isDragging}
         onRemove={() => onRemove(entry)}
+        onEdit={() => onEdit(entry)}
         className="touch-none cursor-grab active:cursor-grabbing"
         {...attributes}
         {...listeners}
@@ -270,12 +293,21 @@ function ListSlot({
   maxRank,
   moveTo,
   onRemove,
+  onEdit,
 }: Omit<SlotsProps, "state"> & { entry: EntryWithItem | null; slot: number }) {
   const { setNodeRef, isOver } = useDroppable({ id: slotId(slot) });
   return (
     <li ref={setNodeRef} className={cn("rounded-lg", isOver && entry && "ring-2 ring-accent")}>
       {entry ? (
-        <DraggableRow entry={entry} slot={slot} aspect={aspect} maxRank={maxRank} moveTo={moveTo} onRemove={onRemove} />
+        <DraggableRow
+          entry={entry}
+          slot={slot}
+          aspect={aspect}
+          maxRank={maxRank}
+          moveTo={moveTo}
+          onRemove={onRemove}
+          onEdit={onEdit}
+        />
       ) : (
         <div
           aria-label={`Empty slot #${slot + 1}`}
@@ -299,6 +331,7 @@ function DraggableRow({
   maxRank,
   moveTo,
   onRemove,
+  onEdit,
 }: Omit<SlotsProps, "state"> & { entry: EntryWithItem; slot: number }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id: entry.id });
   return (
@@ -309,6 +342,7 @@ function DraggableRow({
       aspect={aspect}
       dragging={isDragging}
       onRemove={() => onRemove(entry)}
+      onEdit={() => onEdit(entry)}
       handleProps={{ ...attributes, ...listeners, ref: setActivatorNodeRef } as React.HTMLAttributes<HTMLButtonElement>}
       rankControl={
         <RankMover
@@ -390,6 +424,7 @@ function RankMover({
         defaultValue={label === "#" ? "" : label.replace("#", "")}
         aria-label={`Move ${title} to rank`}
         onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Enter") commit(e.currentTarget.value);
@@ -409,7 +444,10 @@ function RankMover({
       title="Move to a rank"
       aria-label={`Move ${title} to a rank (now ${label === "#" ? "not ranked" : label})`}
       onPointerDown={(e) => e.stopPropagation()}
-      onClick={() => setEditing(true)}
+      onClick={(e) => {
+        e.stopPropagation(); // don't also open the item editor on the row behind
+        setEditing(true);
+      }}
       className={cn(
         "items-center tabular-nums",
         plain
