@@ -27,7 +27,7 @@ export default async function ComparePage({
       return (
         <div className="mx-auto max-w-md py-16 text-center">
           <p className="font-medium">{e.message}</p>
-          <Link href="/dashboard" className="mt-3 inline-block text-sm text-accent hover:underline">
+          <Link href="/lists" className="mt-3 inline-block text-sm text-accent hover:underline">
             Back to your lists
           </Link>
         </div>

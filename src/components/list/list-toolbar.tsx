@@ -119,7 +119,7 @@ export function OwnerActions({
     if (!window.confirm("Delete this list? This can't be undone.")) return;
     try {
       await api(`/api/lists/${listId}`, { method: "DELETE" });
-      router.replace("/dashboard");
+      router.replace("/lists");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't delete the list");

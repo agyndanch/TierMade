@@ -1,25 +1,38 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/session";
-import { listsByOwner, searchLists } from "@/repositories/lists";
+import { searchLists } from "@/repositories/lists";
 import { ListCard } from "@/components/list-card";
 import { buttonClass } from "@/components/ui";
 
-export const metadata = { title: "Your lists" };
+export const metadata = { title: "Home" };
+
+const RECENT = 8;
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [mine, recent] = await Promise.all([listsByOwner(user.id), searchLists(user.id, { limit: 8 })]);
-  const { lists: shared, hasMore: hasMoreShared } = recent;
+  const [own, friends] = await Promise.all([
+    searchLists(user.id, { ownerId: user.id, limit: RECENT }),
+    searchLists(user.id, { limit: RECENT }),
+  ]);
+  const { lists: mine, hasMore: hasMoreMine } = own;
+  const { lists: shared, hasMore: hasMoreShared } = friends;
 
   return (
     <div className="space-y-10">
       <section>
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold tracking-tight">Your lists</h1>
-          <Link href="/lists/new" className={buttonClass("primary")}>
-            <Plus className="size-4" /> New list
-          </Link>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h1 className="text-2xl font-bold tracking-tight">Your recent lists</h1>
+          <div className="flex items-center gap-4">
+            {mine.length > 0 && (
+              <Link href="/lists" className="text-sm font-medium text-accent hover:underline">
+                {hasMoreMine ? "See all" : "Search & filter"} →
+              </Link>
+            )}
+            <Link href="/lists/new" className={buttonClass("primary")}>
+              <Plus className="size-4" /> New list
+            </Link>
+          </div>
         </div>
         {mine.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-10 text-center">

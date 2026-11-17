@@ -60,8 +60,11 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Link href="/dashboard" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
-          <ArrowLeft className="size-4" /> All lists
+        <Link
+          href={isOwner ? "/lists" : "/friends/lists"}
+          className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> {isOwner ? "My lists" : "Friends’ lists"}
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">

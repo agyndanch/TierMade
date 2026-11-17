@@ -12,11 +12,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-1 px-4 sm:px-6">
-          <Link href="/dashboard" className="mr-3 text-base font-bold tracking-tight">
-            TierMade
+        <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-0.5 px-3 sm:gap-1 sm:px-6">
+          <Link href="/dashboard" aria-label="TierMade home" className="mr-1.5 text-base font-bold tracking-tight sm:mr-3">
+            {/* compact wordmark on phones so Home · My Lists · Friends fit on one line */}
+            <span className="sm:hidden" aria-hidden>
+              TM
+            </span>
+            <span className="hidden sm:inline">TierMade</span>
           </Link>
-          <NavLink href="/dashboard">Lists</NavLink>
+          <NavLink href="/dashboard">Home</NavLink>
+          <NavLink href="/lists">My Lists</NavLink>
           <NavLink href="/friends">
             Friends
             {incoming.length > 0 && (
@@ -25,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </span>
             )}
           </NavLink>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
             <Link
               href={`/u/${user.username}`}
               aria-label="Your profile"
