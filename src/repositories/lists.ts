@@ -42,7 +42,18 @@ export async function findListById(id: string, d: DB = db): Promise<List | null>
 export async function updateList(
   id: string,
   patch: Partial<
-    Pick<List, "title" | "description" | "visibility" | "view" | "gridColumns" | "gridRows" | "showNumbers">
+    Pick<
+      List,
+      | "title"
+      | "description"
+      | "visibility"
+      | "view"
+      | "gridColumns"
+      | "gridRows"
+      | "showNumbers"
+      | "showTitles"
+      | "showCreators"
+    >
   >,
   d: DB = db,
 ): Promise<List | null> {

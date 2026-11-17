@@ -20,6 +20,22 @@ export function sniffImageType(buf: Uint8Array): ImageType | null {
   return null;
 }
 
+/**
+ * Catalog cover hosts the cover proxy may fetch from (Deezer, TMDB, IGDB).
+ * https only, default port, exact host or a subdomain of dzcdn.net.
+ */
+export function isAllowedCoverUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.port || u.username || u.password) return false;
+  const h = u.hostname.toLowerCase();
+  return h === "image.tmdb.org" || h === "images.igdb.com" || h === "dzcdn.net" || h.endsWith(".dzcdn.net");
+}
+
 /** Path the app serves an uploaded image from. */
 export const imagePath = (id: string) => `/api/images/${id}`;
 

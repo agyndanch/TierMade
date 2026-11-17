@@ -9,8 +9,10 @@ import type { ListTier } from "@/db/schema";
 import type { EntryWithItem } from "@/repositories/entries";
 import type { ListDisplay } from "@/lib/list-display";
 import * as slots from "@/lib/ranked-slots";
-import { api } from "@/lib/utils";
-import { DisplayControls } from "./display-controls";
+import { SlidersHorizontal } from "lucide-react";
+import { api, cn } from "@/lib/utils";
+import { CustomizePanel, ViewBar } from "./display-controls";
+import { SaveImageButton } from "./save-image-button";
 import { TierBoard, UNSORTED, toContainers, toOrderPayload, type Containers } from "./editor-board";
 import { RankedEditor } from "./ranked-editor";
 import { SearchPanel } from "./search-panel";
@@ -20,6 +22,7 @@ type OrderPayload = { id: string; tierId: string | null; position: number; unran
 
 export function ListEditor({
   listId,
+  listTitle,
   format,
   tiers,
   initialEntries,
@@ -27,6 +30,8 @@ export function ListEditor({
   category,
 }: {
   listId: string;
+  /** used to name a saved image */
+  listTitle: string;
   format: "ranked" | "tier";
   tiers: ListTier[];
   initialEntries: EntryWithItem[];
@@ -43,6 +48,7 @@ export function ListEditor({
   const lastSaved = useRef(JSON.stringify(payloadNow(containers, ranked)));
   const [display, setDisplay] = useState(initialDisplay);
   const savedDisplay = useRef(initialDisplay);
+  const [panel, setPanel] = useState<"add" | "customize">("add");
 
   // Save display changes after the clicking stops, sending only what changed.
   useEffect(() => {
@@ -163,12 +169,15 @@ export function ListEditor({
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <section aria-label="Your ranking" className="order-2 min-w-0 lg:order-1">
         {format === "ranked" && (
-          <DisplayControls
+          <ViewBar
             display={display}
             onChange={setDisplay}
             filledSpots={ranked.slots.slice(0, display.gridColumns * display.gridRows).filter(Boolean).length}
             hasGaps={slots.hasGaps(ranked)}
             onRemoveGaps={() => changeRanked(slots.compact(ranked))}
+            saveImage={
+              <SaveImageButton title={listTitle} slots={ranked.slots} display={display} aspect={category.aspect} />
+            }
           />
         )}
         {format === "ranked" ? (
@@ -206,14 +215,54 @@ export function ListEditor({
       </section>
       <aside className="order-1 lg:order-2">
         <div className="rounded-xl border border-border bg-surface p-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
-          <h2 className="mb-2 text-sm font-semibold">Add {category.label.toLowerCase()}</h2>
-          <SearchPanel
-            category={category}
-            addedExternalIds={added}
-            pendingExternalIds={pending}
-            onAdd={addItem}
-            onAddCustom={addCustom}
-          />
+          {format === "ranked" ? (
+            <div role="tablist" aria-label="Side panel" className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-surface-2 p-1">
+              {(
+                [
+                  ["add", `Add ${category.label.toLowerCase()}`],
+                  ["customize", "Customize"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  id={`panel-tab-${value}`}
+                  aria-selected={panel === value}
+                  aria-controls={`panel-${value}`}
+                  onClick={() => setPanel(value)}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 truncate rounded-md px-2 py-1.5 text-sm font-medium",
+                    panel === value ? "bg-surface shadow-sm" : "text-muted hover:text-foreground",
+                  )}
+                >
+                  {value === "customize" && <SlidersHorizontal className="size-3.5 shrink-0" />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <h2 className="mb-2 text-sm font-semibold">Add {category.label.toLowerCase()}</h2>
+          )}
+          <div
+            id="panel-add"
+            role={format === "ranked" ? "tabpanel" : undefined}
+            aria-labelledby={format === "ranked" ? "panel-tab-add" : undefined}
+            hidden={format === "ranked" && panel !== "add"}
+          >
+            <SearchPanel
+              category={category}
+              addedExternalIds={added}
+              pendingExternalIds={pending}
+              onAdd={addItem}
+              onAddCustom={addCustom}
+            />
+          </div>
+          {format === "ranked" && panel === "customize" && (
+            <div id="panel-customize" role="tabpanel" aria-labelledby="panel-tab-customize">
+              <CustomizePanel display={display} onChange={setDisplay} creatorLabel={category.creatorLabel} />
+            </div>
+          )}
         </div>
       </aside>
     </div>

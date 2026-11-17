@@ -44,6 +44,8 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
     gridColumns: list.gridColumns,
     gridRows: list.gridRows,
     showNumbers: list.showNumbers,
+    showTitles: list.showTitles,
+    showCreators: list.showCreators,
   };
 
   // Lists this one can be compared against: same category, on the "other" side.
@@ -112,6 +114,7 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
         <ListEditor
           key={list.updatedAt.toISOString()}
           listId={list.id}
+          listTitle={list.title}
           format={list.format}
           tiers={tiers}
           initialEntries={entries}
@@ -119,7 +122,14 @@ export default async function ListPage({ params }: { params: Promise<{ id: strin
           category={category}
         />
       ) : (
-        <StaticBoard format={list.format} tiers={tiers} entries={entries} aspect={category.aspect} display={display} />
+        <StaticBoard
+          format={list.format}
+          tiers={tiers}
+          entries={entries}
+          aspect={category.aspect}
+          display={display}
+          title={list.title}
+        />
       )}
     </div>
   );

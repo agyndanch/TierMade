@@ -111,18 +111,42 @@ describe("lists", () => {
     await expectStatus(lists.reorderList(list.id, alice, []), 400);
   });
 
-  it("defaults to list view and saves grid display settings", async () => {
+  it("defaults new lists to grid view with every label shown, and saves display settings", async () => {
     const list = await lists.createList(alice, { title: "Grid", category: "films", format: "ranked", visibility: "private" });
-    expect(list).toMatchObject({ view: "list", gridColumns: 5, gridRows: 5, showNumbers: true });
+    expect(list).toMatchObject({
+      view: "grid",
+      gridColumns: 5,
+      gridRows: 5,
+      showNumbers: true,
+      showTitles: true,
+      showCreators: true,
+    });
 
-    const patch = updateListSchema.parse({ view: "grid", gridColumns: 3, gridRows: 4, showNumbers: false });
+    const patch = updateListSchema.parse({
+      view: "list",
+      gridColumns: 3,
+      gridRows: 4,
+      showNumbers: false,
+      showTitles: false,
+      showCreators: true,
+    });
     await lists.updateList(list.id, alice, patch);
     const { list: saved } = await lists.getListDetail(list.id, alice);
-    expect(saved).toMatchObject({ view: "grid", gridColumns: 3, gridRows: 4, showNumbers: false, title: "Grid" });
+    expect(saved).toMatchObject({
+      view: "list",
+      gridColumns: 3,
+      gridRows: 4,
+      showNumbers: false,
+      showTitles: false,
+      showCreators: true,
+      title: "Grid",
+    });
 
     expect(() => updateListSchema.parse({ gridColumns: 11 })).toThrow();
     expect(() => updateListSchema.parse({ gridRows: 0 })).toThrow();
     expect(() => updateListSchema.parse({ view: "carousel" })).toThrow();
+    expect(() => updateListSchema.parse({ showTitles: "yes" })).toThrow();
+    expect(() => updateListSchema.parse({ showCreators: 1 })).toThrow();
     await expectStatus(lists.updateList(list.id, bob, { view: "list" }), 404);
   });
 

@@ -124,10 +124,13 @@ export const lists = pgTable(
     format: listFormat("format").notNull().default("ranked"),
     visibility: listVisibility("visibility").notNull().default("private"),
     /** Ranked lists only: a vertical list, or a cover grid with titles beside each row. */
-    view: listView("view").notNull().default("list"),
+    view: listView("view").notNull().default("grid"),
     gridColumns: integer("grid_columns").notNull().default(5),
     gridRows: integer("grid_rows").notNull().default(5),
+    /** grid view: what the text beside each row shows */
     showNumbers: boolean("show_numbers").notNull().default(true),
+    showTitles: boolean("show_titles").notNull().default(true),
+    showCreators: boolean("show_creators").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

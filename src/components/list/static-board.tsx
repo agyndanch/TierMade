@@ -4,6 +4,7 @@ import { DEFAULT_DISPLAY, type ListDisplay } from "@/lib/list-display";
 import { fromEntries } from "@/lib/ranked-slots";
 import { GridTile, RankedRow, TierLabel, TierTile } from "./entry-views";
 import { EmptySlot, RankedGrid } from "./ranked-grid";
+import { SaveImageButton } from "./save-image-button";
 
 /** Read-only rendering of a ranked list or tier list. */
 export function StaticBoard({
@@ -12,12 +13,15 @@ export function StaticBoard({
   entries,
   aspect,
   display = DEFAULT_DISPLAY,
+  title,
 }: {
   format: "ranked" | "tier";
   tiers: ListTier[];
   entries: EntryWithItem[];
   aspect: "square" | "portrait";
   display?: ListDisplay;
+  /** the list's title, for "Save as image" */
+  title?: string;
 }) {
   if (entries.length === 0) {
     return <p className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted">Nothing here yet.</p>;
@@ -30,6 +34,11 @@ export function StaticBoard({
       <div className="space-y-4">
         {display.view === "grid" ? (
           <>
+            {title && (
+              <div className="-mb-2 flex justify-end">
+                <SaveImageButton title={title} slots={slots} display={display} aspect={aspect} />
+              </div>
+            )}
             <RankedGrid
               slots={slots}
               display={display}

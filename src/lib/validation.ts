@@ -21,6 +21,8 @@ export const updateListSchema = z
     gridColumns: z.number().int().min(GRID_MIN).max(GRID_MAX),
     gridRows: z.number().int().min(GRID_MIN).max(GRID_MAX),
     showNumbers: z.boolean(),
+    showTitles: z.boolean(),
+    showCreators: z.boolean(),
   })
   .partial();
 

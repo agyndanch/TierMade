@@ -40,6 +40,8 @@ test("create, rank, befriend, share and compare", async ({ browser }) => {
   const a = await (await browser.newContext()).newPage();
   await signUp(a, alice);
   await createList(a, "Alice's albums", "Ranked list");
+  // New lists open in grid view; this flow uses the list view's drag handles.
+  await a.getByRole("button", { name: "List", exact: true }).click();
   for (const q of ["in rainbows radiohead", "discovery daft punk", "blonde frank ocean"]) await addAlbum(a, q);
   // Ranked lists also render empty slots; count only the rows holding an item.
   const rows = a
