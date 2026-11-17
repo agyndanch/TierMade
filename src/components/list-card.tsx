@@ -1,8 +1,23 @@
 import Link from "next/link";
-import { Lock, Users } from "lucide-react";
+import { Lock, Plus, Users } from "lucide-react";
 import { CATEGORIES, isCategoryId } from "@/catalog/categories";
 import type { ListSummary } from "@/repositories/lists";
 import { Badge } from "./ui";
+
+/** A dashed "+ New list" card that sits in a grid of ListCards. */
+export function NewListTile() {
+  return (
+    <Link
+      href="/lists/new"
+      className="group flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border text-muted transition hover:border-accent hover:bg-accent-soft/30 hover:text-accent"
+    >
+      <span className="flex size-10 items-center justify-center rounded-full bg-surface-2 transition group-hover:bg-accent-soft">
+        <Plus className="size-5" />
+      </span>
+      <span className="text-sm font-semibold">New list</span>
+    </Link>
+  );
+}
 
 export function ListCard({ list, showOwner = false }: { list: ListSummary; showOwner?: boolean }) {
   const category = isCategoryId(list.category) ? CATEGORIES[list.category] : null;

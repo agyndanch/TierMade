@@ -1,19 +1,44 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { searchLists } from "@/repositories/lists";
-import { ListCard } from "@/components/list-card";
+import { ListCard, NewListTile } from "@/components/list-card";
 import { buttonClass } from "@/components/ui";
 
 export const metadata = { title: "Home" };
 
-const RECENT = 8;
+/** 7 of yours + the New list tile = two even rows of 4; friends' row shows 8. */
+const MY_RECENT = 7;
+const FRIENDS_RECENT = 8;
+
+/** Section header: title on the left, a "→" link on the right (same for both sections). */
+function SectionHeader({
+  as: Heading,
+  title,
+  href,
+  linkText,
+}: {
+  as: "h1" | "h2";
+  title: string;
+  href?: string;
+  linkText?: string;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <Heading className="text-xl font-semibold tracking-tight">{title}</Heading>
+      {href && (
+        <Link href={href} className="shrink-0 text-sm font-medium text-accent hover:underline">
+          {linkText} →
+        </Link>
+      )}
+    </div>
+  );
+}
 
 export default async function DashboardPage() {
   const user = await requireUser();
   const [own, friends] = await Promise.all([
-    searchLists(user.id, { ownerId: user.id, limit: RECENT }),
-    searchLists(user.id, { limit: RECENT }),
+    searchLists(user.id, { ownerId: user.id, limit: MY_RECENT }),
+    searchLists(user.id, { limit: FRIENDS_RECENT }),
   ]);
   const { lists: mine, hasMore: hasMoreMine } = own;
   const { lists: shared, hasMore: hasMoreShared } = friends;
@@ -21,19 +46,12 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-10">
       <section>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <h1 className="text-2xl font-bold tracking-tight">Your recent lists</h1>
-          <div className="flex items-center gap-4">
-            {mine.length > 0 && (
-              <Link href="/lists" className="text-sm font-medium text-accent hover:underline">
-                {hasMoreMine ? "See all" : "Search & filter"} →
-              </Link>
-            )}
-            <Link href="/lists/new" className={buttonClass("primary")}>
-              <Plus className="size-4" /> New list
-            </Link>
-          </div>
-        </div>
+        <SectionHeader
+          as="h1"
+          title="Your recent lists"
+          href={mine.length > 0 ? "/lists" : undefined}
+          linkText={hasMoreMine ? "See all" : "Search & filter"}
+        />
         {mine.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-10 text-center">
             <p className="font-medium">No lists yet</p>
@@ -44,6 +62,7 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <NewListTile />
             {mine.map((l) => (
               <ListCard key={l.id} list={l} />
             ))}
@@ -52,14 +71,12 @@ export default async function DashboardPage() {
       </section>
 
       <section>
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold">Recently updated by friends</h2>
-          {shared.length > 0 && (
-            <Link href="/friends/lists" className="text-sm font-medium text-accent hover:underline">
-              {hasMoreShared ? "See all" : "Search & filter"} →
-            </Link>
-          )}
-        </div>
+        <SectionHeader
+          as="h2"
+          title="Recently updated by friends"
+          href={shared.length > 0 ? "/friends/lists" : undefined}
+          linkText={hasMoreShared ? "See all" : "Search & filter"}
+        />
         {shared.length === 0 ? (
           <p className="text-sm text-muted">
             Lists your friends share with you show up here.{" "}

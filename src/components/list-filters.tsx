@@ -2,13 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { CATEGORIES, CATEGORY_IDS } from "@/catalog/categories";
 import { Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-const selectClass =
-  "h-9 rounded-lg border border-border bg-surface px-2.5 text-sm text-foreground focus:outline-2 focus:outline-accent";
+/**
+ * A select with our own chevron. The native arrow is hidden (appearance-none)
+ * because on Windows Chromium paints a square hover box over it that pokes
+ * out past the rounded corners.
+ */
+function FilterSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <span className="relative inline-flex">
+      <select
+        {...props}
+        className="h-9 cursor-pointer appearance-none rounded-lg border border-border bg-surface py-0 pl-2.5 pr-8 text-sm text-foreground transition-colors hover:border-accent/60 focus:outline-2 focus:outline-accent"
+      />
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted"
+      />
+    </span>
+  );
+}
 
 /**
  * Search + filter bar for list grids. Everything lives in the URL query
@@ -68,9 +85,8 @@ export function ListFilters({
         />
       </div>
       {friends && (
-        <select
+        <FilterSelect
           aria-label="Friend"
-          className={selectClass}
           value={value("friend")}
           onChange={(e) => update({ friend: e.target.value || null })}
         >
@@ -81,11 +97,10 @@ export function ListFilters({
               {f.name && f.name !== f.username ? ` (${f.name})` : ""}
             </option>
           ))}
-        </select>
+        </FilterSelect>
       )}
-      <select
+      <FilterSelect
         aria-label="Category"
-        className={selectClass}
         value={value("category")}
         onChange={(e) => update({ category: e.target.value || null })}
       >
@@ -95,26 +110,24 @@ export function ListFilters({
             {CATEGORIES[id].label}
           </option>
         ))}
-      </select>
-      <select
+      </FilterSelect>
+      <FilterSelect
         aria-label="List type"
-        className={selectClass}
         value={value("format")}
         onChange={(e) => update({ format: e.target.value || null })}
       >
         <option value="">Ranked & tier</option>
         <option value="ranked">Ranked</option>
         <option value="tier">Tier lists</option>
-      </select>
-      <select
+      </FilterSelect>
+      <FilterSelect
         aria-label="Sort"
-        className={selectClass}
         value={value("sort") || "recent"}
         onChange={(e) => update({ sort: e.target.value === "title" ? "title" : null })}
       >
         <option value="recent">Recently updated</option>
         <option value="title">A–Z</option>
-      </select>
+      </FilterSelect>
       {filtered && (
         <button
           type="button"
