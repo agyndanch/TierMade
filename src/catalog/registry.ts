@@ -1,5 +1,5 @@
 import "server-only";
-import type { CategoryId } from "./categories";
+import type { CatalogCategoryId } from "./categories";
 import type { CatalogAdapter } from "./types";
 import { withCache } from "./cache";
 import { createDeezerAlbumAdapter, createDeezerTrackAdapter } from "./adapters/deezer";
@@ -8,10 +8,11 @@ import { createIgdbAdapter } from "./adapters/igdb";
 import { createAniListAnimeAdapter, createAniListMangaAdapter } from "./adapters/anilist";
 
 /**
- * Category → adapter. Adding a category = add an entry here (plus its
- * metadata in categories.ts). Nothing else in the app changes.
+ * Catalog category → adapter. Adding a category = add an entry here (plus its
+ * metadata in categories.ts). "anything" lists have no adapter of their own:
+ * each item is searched and added through its source's category.
  */
-const ADAPTERS: Record<CategoryId, CatalogAdapter> = {
+const ADAPTERS: Record<CatalogCategoryId, CatalogAdapter> = {
   albums: withCache(createDeezerAlbumAdapter(), "albums"),
   songs: withCache(createDeezerTrackAdapter(), "songs"),
   games: withCache(createIgdbAdapter(), "games"),
@@ -21,6 +22,6 @@ const ADAPTERS: Record<CategoryId, CatalogAdapter> = {
   manga: withCache(createAniListMangaAdapter(), "manga"),
 };
 
-export function getAdapter(category: CategoryId): CatalogAdapter {
+export function getAdapter(category: CatalogCategoryId): CatalogAdapter {
   return ADAPTERS[category];
 }

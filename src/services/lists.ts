@@ -1,6 +1,6 @@
 import { db, type DB } from "@/db";
 import type { Item, List, ListTier } from "@/db/schema";
-import { CATEGORIES, isCategoryId } from "@/catalog/categories";
+import { CATEGORIES, isCatalogCategory, isCategoryId, type CatalogCategoryId } from "@/catalog/categories";
 import type { CatalogAdapter } from "@/catalog/types";
 import { badRequest, conflict, notFound } from "@/lib/errors";
 import { MAX_IMAGE_BYTES, MAX_IMAGES_PER_USER, imagePath, sniffImageType } from "@/lib/images";
@@ -94,6 +94,7 @@ function toEntryWithItem(
     customSubtitle: null,
     item: {
       id: item.id,
+      category: item.category,
       externalId: item.externalId,
       title: item.title,
       subtitle: item.subtitle,
@@ -175,26 +176,38 @@ export async function addCustomItemToList(listId: string, userId: string, input:
 /**
  * Search-to-add: the server resolves the external id through the category's
  * adapter (never trusting client-sent titles/images), caches the item, and
- * appends it to the list.
+ * appends it to the list. "Anything" lists say which source the item is from
+ * (`itemCategory`); the item keeps that real category, so it's the same item
+ * row a Films/Albums/... list would use.
  */
 export async function addItemToList(
   listId: string,
   userId: string,
   externalId: string,
   tierId: string | null,
-  adapterFor: (category: List["category"]) => CatalogAdapter,
+  adapterFor: (category: CatalogCategoryId) => CatalogAdapter,
+  itemCategory?: CatalogCategoryId | null,
   d: DB = db,
 ) {
   const list = await getOwnedList(listId, userId, d);
   if (!isCategoryId(list.category)) throw badRequest("This list's category is no longer supported");
 
+  let source: CatalogCategoryId;
+  if (list.category === "anything") {
+    if (!itemCategory || !isCatalogCategory(itemCategory)) throw badRequest("Pick a source (albums, films, …) for this item");
+    source = itemCategory;
+  } else {
+    if (itemCategory && itemCategory !== list.category) throw badRequest("This list only takes " + CATEGORIES[list.category].label.toLowerCase());
+    source = list.category;
+  }
+
   await assertTierOnList(list, tierId, d);
 
-  const adapter = adapterFor(list.category);
+  const adapter = adapterFor(source);
   const result = await adapter.getItem(externalId);
-  if (!result) throw notFound(`That ${CATEGORIES[list.category].noun} couldn't be found`);
+  if (!result) throw notFound(`That ${CATEGORIES[source].noun} couldn't be found`);
 
-  const item = await upsertItem(list.category, adapter.source, result, d);
+  const item = await upsertItem(source, adapter.source, result, d);
   if (await entriesRepo.entryExistsForItem(list.id, item.id, d)) {
     throw conflict(`"${item.title}" is already on this list`);
   }

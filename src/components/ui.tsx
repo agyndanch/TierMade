@@ -104,17 +104,28 @@ export function Cover({
   aspect: "square" | "portrait";
   className?: string;
 }) {
+  // Square tiles fit the image inside (a poster in an "Anything" list shows whole,
+  // with dark bars); album art is square anyway. Portrait tiles crop to fill.
+  const square = aspect === "square";
   return (
     <div
       className={cn(
-        "relative shrink-0 overflow-hidden rounded-md bg-surface-2",
-        aspect === "square" ? "aspect-square" : "aspect-[2/3]",
+        "relative shrink-0 overflow-hidden rounded-md",
+        square ? "aspect-square" : "aspect-[2/3]",
+        src && square ? "bg-neutral-950" : "bg-surface-2",
         className,
       )}
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" className="size-full object-cover" draggable={false} />
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className={cn("size-full", square ? "object-contain" : "object-cover")}
+          draggable={false}
+        />
       ) : (
         <div className="flex size-full items-center justify-center p-1 text-center text-[10px] leading-tight text-muted">
           {alt}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { CategoryInfo } from "@/catalog/categories";
+import type { CatalogCategoryId, CategoryInfo } from "@/catalog/categories";
 import type { CatalogResult } from "@/catalog/types";
 import type { ListTier } from "@/db/schema";
 import type { EntryWithItem } from "@/repositories/entries";
@@ -17,7 +17,7 @@ import { ItemEditDialog } from "./item-edit-dialog";
 import { SaveImageButton } from "./save-image-button";
 import { TierBoard, UNSORTED, toContainers, toOrderPayload, type Containers } from "./editor-board";
 import { RankedEditor } from "./ranked-editor";
-import { SearchPanel } from "./search-panel";
+import { SearchPanel, resultKey } from "./search-panel";
 
 type RankedState = slots.RankedState<EntryWithItem>;
 type OrderPayload = { id: string; tierId: string | null; position: number; unranked: boolean }[];
@@ -76,7 +76,10 @@ export function ListEditor({
     () => (format === "ranked" ? slots.allEntries(ranked) : Object.values(containers).flat()),
     [format, ranked, containers],
   );
-  const added = useMemo(() => new Set(allEntries.map((e) => e.item.externalId)), [allEntries]);
+  const added = useMemo(
+    () => new Set(allEntries.map((e) => resultKey(e.item.category, e.item.externalId))),
+    [allEntries],
+  );
 
   /** Show a newly created entry where the server put it. */
   function showNewEntry(entry: EntryWithItem) {
@@ -113,12 +116,14 @@ export function ListEditor({
     }
   }
 
-  async function addItem(r: CatalogResult) {
-    setPending((p) => new Set(p).add(r.externalId));
+  async function addItem(r: CatalogResult, source: CatalogCategoryId) {
+    const key = resultKey(source, r.externalId);
+    setPending((p) => new Set(p).add(key));
     try {
       const { entry } = await api<{ entry: EntryWithItem }>(`/api/lists/${listId}/entries`, {
         method: "POST",
-        json: { externalId: r.externalId },
+        // "anything" lists say which source the item is from; others only take their own category
+        json: { externalId: r.externalId, ...(category.id === "anything" ? { itemCategory: source } : {}) },
       });
       showNewEntry(entry);
     } catch (e) {
@@ -126,7 +131,7 @@ export function ListEditor({
     } finally {
       setPending((p) => {
         const n = new Set(p);
-        n.delete(r.externalId);
+        n.delete(key);
         return n;
       });
     }
@@ -284,8 +289,8 @@ export function ListEditor({
           >
             <SearchPanel
               category={category}
-              addedExternalIds={added}
-              pendingExternalIds={pending}
+              addedKeys={added}
+              pendingKeys={pending}
               onAdd={addItem}
               onAddCustom={addCustom}
             />

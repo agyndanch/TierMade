@@ -11,6 +11,7 @@ const entry: EntryWithItem = {
   customSubtitle: null,
   item: {
     id: "i1",
+    category: "games",
     externalId: "x",
     title: "Persona 5 Royal",
     subtitle: "Atlus",

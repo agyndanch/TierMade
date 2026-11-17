@@ -7,6 +7,8 @@ import type { CatalogAdapter, CatalogResult } from "@/catalog/types";
 import { HttpError } from "@/lib/errors";
 import { MAX_IMAGE_BYTES, imageIdFromUrl } from "@/lib/images";
 import {
+  addEntrySchema,
+  searchQuerySchema,
   createListSchema,
   customEntrySchema,
   entryLabelsSchema,
@@ -196,6 +198,43 @@ describe("lists", () => {
       404,
     );
     expect(() => entryLabelsSchema.parse({ displayTitle: "x".repeat(201), displaySubtitle: null })).toThrow();
+  });
+
+  it("mixes sources in an Anything list while items keep their real category", async () => {
+    const albums: CatalogAdapter = {
+      source: "deezer",
+      search: async () => [],
+      getItem: async (id) => (id === "302127" ? { externalId: "302127", title: "Discovery", subtitle: "Daft Punk" } : null),
+    };
+    const bySource = (c: string) => (c === "albums" ? albums : fakeAdapter);
+
+    const mixed = await lists.createList(
+      alice,
+      createListSchema.parse({ title: "Favorite things", category: "anything", format: "ranked" }),
+    );
+    const film = await lists.addItemToList(mixed.id, alice, "heat", null, bySource, "films");
+    const album = await lists.addItemToList(mixed.id, alice, "302127", null, bySource, "albums");
+    expect([film.item.category, album.item.category]).toEqual(["films", "albums"]);
+    expect((await lists.getListDetail(mixed.id, alice)).entries.map((e) => e.item.title)).toEqual(["Heat", "Discovery"]);
+
+    // same catalog row as a Films list holding the same film
+    const films = await lists.createList(alice, { title: "Films", category: "films", format: "ranked", visibility: "private" });
+    const sameFilm = await lists.addItemToList(films.id, alice, "heat", null, bySource);
+    expect(sameFilm.item.id).toBe(film.item.id);
+
+    // a source is required in Anything lists, and must match elsewhere
+    await expectStatus(lists.addItemToList(mixed.id, alice, "alien", null, bySource), 400);
+    await expectStatus(lists.addItemToList(films.id, alice, "alien", null, bySource, "albums"), 400);
+    expect(() => addEntrySchema.parse({ externalId: "1", itemCategory: "anything" })).toThrow();
+    expect(addEntrySchema.parse({ externalId: "1", itemCategory: "anime" }).itemCategory).toBe("anime");
+    expect(() => searchQuerySchema.parse({ category: "anything", q: "x" })).toThrow();
+
+    // custom items work, and two Anything lists compare
+    const custom = await lists.addCustomItemToList(mixed.id, alice, { title: "Grandma's lasagna", creator: null });
+    expect(custom.item.category).toBe("anything");
+    const other = await lists.createList(alice, { title: "Other things", category: "anything", format: "ranked", visibility: "private" });
+    await lists.addItemToList(other.id, alice, "302127", null, bySource, "albums");
+    expect((await compareListsForViewer(mixed.id, other.id, alice)).result.shared).toHaveLength(1);
   });
 
   it("accepts the anime and manga categories", async () => {

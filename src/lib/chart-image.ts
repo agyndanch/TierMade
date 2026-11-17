@@ -79,8 +79,20 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.roundRect(x, y, w, h, r);
 }
 
-/** Draws an image like CSS object-fit: cover. */
+/**
+ * Draws an image like the on-screen Cover: square tiles fit it inside (object-fit:
+ * contain, over the tile's dark fill), portrait tiles crop to fill (cover).
+ */
 function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  if (w === h) {
+    const fit = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+    const dw = img.naturalWidth * fit;
+    const dh = img.naturalHeight * fit;
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(x, y, w, h);
+    ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    return;
+  }
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
   const sw = w / scale;
   const sh = h / scale;

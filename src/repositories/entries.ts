@@ -13,6 +13,8 @@ export type EntryWithItem = {
   customSubtitle: string | null;
   item: {
     id: string;
+    /** the item's own category (in "anything" lists this differs from the list's) */
+    category: string;
     externalId: string;
     /** what this list shows: the custom name if there is one, else the catalog's */
     title: string;
@@ -41,6 +43,7 @@ export async function entriesForList(listId: string, d: DB = db): Promise<EntryW
       customSubtitle: listEntries.displaySubtitle,
       item: {
         id: items.id,
+        category: items.category,
         externalId: items.externalId,
         title: sql<string>`coalesce(${listEntries.displayTitle}, ${items.title})`,
         subtitle: sql<string | null>`coalesce(${listEntries.displaySubtitle}, ${items.subtitle})`,

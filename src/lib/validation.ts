@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { CATEGORY_IDS } from "@/catalog/categories";
+import { CATALOG_CATEGORY_IDS, CATEGORY_IDS } from "@/catalog/categories";
 import { GRID_MAX, GRID_MIN, LIST_VIEWS } from "@/lib/list-display";
 
+/** Any list category, including "anything". */
 export const categorySchema = z.enum(CATEGORY_IDS, { message: "Unknown category" });
+/** A category with its own catalog source (search and items always use one of these). */
+export const catalogCategorySchema = z.enum(CATALOG_CATEGORY_IDS, { message: "Pick a source to search" });
 
 export const createListSchema = z.object({
   title: z.string().trim().min(1, "Give your list a title").max(100),
@@ -28,6 +31,8 @@ export const updateListSchema = z
 
 export const addEntrySchema = z.object({
   externalId: z.string().trim().min(1).max(64),
+  /** "anything" lists: which source the item comes from */
+  itemCategory: catalogCategorySchema.optional(),
   tierId: z.uuid().nullable().optional(),
 });
 
@@ -96,7 +101,7 @@ export const friendRequestSchema = z.object({
 export const shareSchema = z.object({ userId: z.string().min(1) });
 
 export const searchQuerySchema = z.object({
-  category: categorySchema,
+  category: catalogCategorySchema,
   q: z.string().trim().min(1, "Type something to search").max(100),
 });
 

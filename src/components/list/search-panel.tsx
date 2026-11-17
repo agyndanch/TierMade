@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2, PencilLine, Plus, Search } from "lucide-react";
-import type { CategoryInfo } from "@/catalog/categories";
+import {
+  CATALOG_CATEGORY_IDS,
+  CATEGORIES,
+  isCatalogCategory,
+  type CatalogCategoryId,
+  type CategoryInfo,
+} from "@/catalog/categories";
+import { CATEGORY_ICONS } from "@/catalog/category-icons";
 import type { CatalogResult } from "@/catalog/types";
 import { Cover, Input } from "@/components/ui";
 import { api, cn } from "@/lib/utils";
@@ -18,29 +25,77 @@ function useDebounced<T>(value: T, ms: number) {
   return v;
 }
 
-/** Search the category's external database; one click adds a result. */
+/** Key for "is this result already on the list?": the same id can exist in two sources. */
+export const resultKey = (source: string, externalId: string) => `${source}:${externalId}`;
+
+/**
+ * "Anything" lists: the source to search, remembered per browser. A tiny external
+ * store over localStorage (with an in-memory fallback when storage is blocked);
+ * the server always renders the default, so hydration matches.
+ */
+const SOURCE_KEY = "tiermade:anything-source";
+const DEFAULT_SOURCE: CatalogCategoryId = "albums";
+let memorySource: CatalogCategoryId = DEFAULT_SOURCE;
+const sourceListeners = new Set<() => void>();
+
+function readSource(): CatalogCategoryId {
+  try {
+    const saved = window.localStorage.getItem(SOURCE_KEY);
+    return isCatalogCategory(saved) ? saved : memorySource;
+  } catch {
+    return memorySource;
+  }
+}
+function subscribeSource(cb: () => void) {
+  sourceListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    sourceListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+function writeSource(s: CatalogCategoryId) {
+  memorySource = s;
+  try {
+    window.localStorage.setItem(SOURCE_KEY, s);
+  } catch {
+    // storage unavailable: remembered only for this visit
+  }
+  sourceListeners.forEach((l) => l());
+}
+
+function useSource(category: CategoryInfo): [CatalogCategoryId, (s: CatalogCategoryId) => void] {
+  const chosen = useSyncExternalStore(subscribeSource, readSource, () => DEFAULT_SOURCE);
+  return [isCatalogCategory(category.id) ? category.id : chosen, writeSource];
+}
+
+/** Search the category's external database (or a chosen one, for "anything" lists); one click adds a result. */
 export function SearchPanel({
   category,
-  addedExternalIds,
-  pendingExternalIds,
+  addedKeys,
+  pendingKeys,
   onAdd,
   onAddCustom,
 }: {
   category: CategoryInfo;
-  addedExternalIds: Set<string>;
-  pendingExternalIds: Set<string>;
-  onAdd: (result: CatalogResult) => void;
+  /** resultKey(source, externalId) of items already on the list */
+  addedKeys: Set<string>;
+  pendingKeys: Set<string>;
+  onAdd: (result: CatalogResult, source: CatalogCategoryId) => void;
   /** resolves true when the custom item was added */
   onAddCustom: (form: FormData) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [customOpen, setCustomOpen] = useState(false);
   const q = useDebounced(query.trim(), 300);
+  const [source, setSource] = useSource(category);
+  const mixed = !isCatalogCategory(category.id);
+  const searching = CATEGORIES[source];
 
   const { data, error, isFetching } = useQuery({
-    queryKey: ["search", category.id, q],
+    queryKey: ["search", source, q],
     queryFn: ({ signal }) =>
-      api<{ results: CatalogResult[] }>(`/api/search?category=${category.id}&q=${encodeURIComponent(q)}`, { signal }),
+      api<{ results: CatalogResult[] }>(`/api/search?category=${source}&q=${encodeURIComponent(q)}`, { signal }),
     enabled: q.length > 0,
   });
 
@@ -64,39 +119,70 @@ export function SearchPanel({
 
   return (
     <div className="flex flex-col gap-3">
+      {mixed && (
+        <div role="radiogroup" aria-label="Search in" className="flex flex-wrap gap-1.5">
+          {CATALOG_CATEGORY_IDS.map((id) => {
+            const Icon = CATEGORY_ICONS[id];
+            const on = id === source;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setSource(id)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                  on
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-muted hover:border-accent/50 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-3.5" />
+                {CATEGORIES[id].label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
         <Input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search for ${/^[aeiou]/.test(category.noun) ? "an" : "a"} ${category.noun}…`}
-          aria-label={`Search ${category.label}`}
+          placeholder={`Search for ${/^[aeiou]/.test(searching.noun) ? "an" : "a"} ${searching.noun}…`}
+          aria-label={`Search ${searching.label}`}
           className="pl-9"
         />
         {isFetching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted" />}
       </div>
 
       {error && <p className="text-sm text-danger">{error.message}</p>}
-      {!error && q.length === 0 && <p className="text-sm text-muted">{category.placeholder}</p>}
+      {!error && q.length === 0 && <p className="text-sm text-muted">{mixed ? searching.placeholder : category.placeholder}</p>}
       {noResults && <p className="text-sm text-muted">No results for “{q}”.</p>}
 
       <ul className="flex flex-col gap-1" aria-label="Search results">
         {results.map((r) => {
-          const added = addedExternalIds.has(r.externalId);
-          const pending = pendingExternalIds.has(r.externalId);
+          const added = addedKeys.has(resultKey(source, r.externalId));
+          const pending = pendingKeys.has(resultKey(source, r.externalId));
           return (
             <li key={r.externalId}>
               <button
                 type="button"
                 disabled={added || pending}
-                onClick={() => onAdd(r)}
+                onClick={() => onAdd(r, source)}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg p-1.5 text-left transition",
                   added ? "opacity-60" : "hover:bg-surface-2",
                 )}
               >
-                <Cover src={r.imageUrl} alt={r.title} aspect={category.aspect} className={category.aspect === "square" ? "w-11" : "w-9"} />
+                <Cover
+                  src={r.imageUrl}
+                  alt={r.title}
+                  aspect={searching.aspect}
+                  className={searching.aspect === "square" ? "w-11" : "w-9"}
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{r.title}</span>
                   {typeof r.metadata?.altTitle === "string" && (

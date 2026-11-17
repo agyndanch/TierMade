@@ -1,6 +1,11 @@
 // Client-safe category metadata. Server-only adapters live in ./registry.ts.
 
-export const CATEGORY_IDS = ["albums", "songs", "games", "films", "tv", "anime", "manga"] as const;
+/** Categories backed by one external catalog (each has an adapter). */
+export const CATALOG_CATEGORY_IDS = ["albums", "songs", "games", "films", "tv", "anime", "manga"] as const;
+export type CatalogCategoryId = (typeof CATALOG_CATEGORY_IDS)[number];
+
+/** All list categories: the catalog ones plus "anything", which mixes every source. */
+export const CATEGORY_IDS = [...CATALOG_CATEGORY_IDS, "anything"] as const;
 export type CategoryId = (typeof CATEGORY_IDS)[number];
 
 export type CategoryInfo = {
@@ -8,9 +13,10 @@ export type CategoryInfo = {
   label: string;
   /** singular noun for UI copy: "Search for an album" */
   noun: string;
-  /** cover aspect ratio for cards */
+  /** cover aspect ratio for cards (square tiles fit images inside, so posters aren't cropped) */
   aspect: "square" | "portrait";
-  source: "deezer" | "igdb" | "tmdb" | "anilist";
+  /** "mixed": items come from any catalog source */
+  source: "deezer" | "igdb" | "tmdb" | "anilist" | "mixed";
   placeholder: string;
   /** label for the creator field when adding a custom item */
   creatorLabel: string;
@@ -80,7 +86,20 @@ export const CATEGORIES: Record<CategoryId, CategoryInfo> = {
     placeholder: "e.g. Berserk, Vagabond",
     creatorLabel: "Author",
   },
+  anything: {
+    id: "anything",
+    label: "Anything",
+    noun: "anything",
+    aspect: "square",
+    source: "mixed",
+    placeholder: "Pick a source, then search: an album, a game, a film…",
+    creatorLabel: "Creator",
+  },
 };
+
+export function isCatalogCategory(value: unknown): value is CatalogCategoryId {
+  return typeof value === "string" && (CATALOG_CATEGORY_IDS as readonly string[]).includes(value);
+}
 
 export function isCategoryId(value: unknown): value is CategoryId {
   return typeof value === "string" && (CATEGORY_IDS as readonly string[]).includes(value);

@@ -2,20 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { BookOpen, Clapperboard, Disc3, Gamepad2, ListOrdered, Music, Rows3, Sparkles, Tv } from "lucide-react";
+import { ListOrdered, Rows3 } from "lucide-react";
 import { CATEGORIES, CATEGORY_IDS, type CategoryId } from "@/catalog/categories";
+import { CATEGORY_ICONS as ICONS } from "@/catalog/category-icons";
 import { Button, Input, Label } from "@/components/ui";
 import { api, cn } from "@/lib/utils";
-
-const ICONS: Record<CategoryId, typeof Disc3> = {
-  albums: Disc3,
-  songs: Music,
-  games: Gamepad2,
-  films: Clapperboard,
-  tv: Tv,
-  anime: Sparkles,
-  manga: BookOpen,
-};
 
 export function NewListForm({ initialCategory }: { initialCategory?: CategoryId }) {
   const router = useRouter();
